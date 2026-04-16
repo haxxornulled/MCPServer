@@ -62,6 +62,15 @@ If you add or materially change tooling, workflows, or public behavior, update t
 - `docs/architecture.md`
 - `docs/method-summary.md`
 
+## Extension Points
+
+Follow the existing architecture seams when extending the server:
+
+- add new tools by implementing `IToolHandler<TRequest>` and registering the handler in Autofac plus `ToolCallRouter`
+- add new resources by implementing `IResourceHandler` and registering the handler in Autofac
+- add new prompts by implementing `IPromptHandler` and registering the handler in Autofac
+- add new infrastructure services behind application abstractions instead of coupling protocol or host layers to concrete implementations
+
 ## Commit Hygiene
 
 - Do not commit generated `.lscache` files, temporary logs, or files under runtime workspace outputs.

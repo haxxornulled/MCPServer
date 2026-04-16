@@ -65,6 +65,15 @@ Update these when behavior changes materially:
 - `CHANGELOG.md` for release notes.
 - `docs/architecture.md` and `docs/method-summary.md` when public behavior or major components change.
 
+## Extension Points
+
+Follow the existing architecture seams when extending the server:
+
+- add new tools by implementing `IToolHandler<TRequest>` and registering the handler in Autofac plus `ToolCallRouter`
+- add new resources by implementing `IResourceHandler` and registering the handler in Autofac
+- add new prompts by implementing `IPromptHandler` and registering the handler in Autofac
+- add new infrastructure services behind application abstractions instead of coupling protocol or host layers to concrete implementations
+
 ## Agent Behavior
 
 - Do not stop at identifying a failed CI job if you can reproduce and fix it.
