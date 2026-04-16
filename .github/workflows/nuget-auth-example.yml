@@ -1,0 +1,24 @@
+name: NuGet Authenticate Example
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  auth-and-restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GitHub Packages
+        run: |
+          dotnet nuget add source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json \
+            -n mcpserver-gh -u ${{ github.actor }} -p ${{ secrets.GH_PACKAGE_TOKEN }} --store-password-in-clear-text
+        env:
+          GH_PACKAGE_TOKEN: ${{ secrets.GH_PACKAGE_TOKEN }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build McpServer.slnx -c Release --no-restore
