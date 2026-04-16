@@ -6,6 +6,7 @@ namespace McpServer.IntegrationTests.Infrastructure;
 
 public sealed class StdioTestServerProcess : IAsyncDisposable
 {
+    private static readonly TimeSpan StartupDelay = TimeSpan.FromMilliseconds(250);
     private readonly Process _process;
     private readonly CancellationTokenSource _stderrPumpCts = new();
     private readonly Task _stderrPumpTask;
@@ -29,10 +30,11 @@ public sealed class StdioTestServerProcess : IAsyncDisposable
 
     public static async Task<StdioTestServerProcess> StartAsync(string projectPath, CancellationToken ct = default)
     {
+        var configuration = GetCurrentConfiguration();
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --project \"{projectPath}\" --no-build",
+            Arguments = $"run --project \"{projectPath}\" -c {configuration} --no-build",
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -50,8 +52,26 @@ public sealed class StdioTestServerProcess : IAsyncDisposable
             throw new InvalidOperationException("Failed to start MCP server process.");
         }
 
-        await Task.Delay(250, ct).ConfigureAwait(false);
-        return new StdioTestServerProcess(process);
+        await Task.Delay(StartupDelay, ct).ConfigureAwait(false);
+
+        var server = new StdioTestServerProcess(process);
+
+        if (process.HasExited)
+        {
+            throw new InvalidOperationException($"MCP server exited during startup. {server.GetStandardErrorSummary()}");
+        }
+
+        return server;
+    }
+
+    private static string GetCurrentConfiguration()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        var pathSegment = $"{Path.DirectorySeparatorChar}Release{Path.DirectorySeparatorChar}";
+
+        return baseDirectory.Contains(pathSegment, StringComparison.OrdinalIgnoreCase)
+            ? "Release"
+            : "Debug";
     }
 
     private async Task PumpStandardErrorAsync(CancellationToken ct)
@@ -102,5 +122,16 @@ public sealed class StdioTestServerProcess : IAsyncDisposable
             _stderrPumpCts.Dispose();
             _process.Dispose();
         }
+    }
+
+    private string GetStandardErrorSummary()
+    {
+        var lines = _stderrLines.ToArray();
+        if (lines.Length is 0)
+        {
+            return "No stderr output was captured.";
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 }
