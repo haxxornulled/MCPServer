@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.4 - 2026-04-16
+
+Patch release aligning repository metadata, LM Studio guidance, and agent-extension policy with the current validated server behavior.
+
+### Changed
+
+- Updated the LM Studio setup guidance to launch the built `McpServer.Host.exe` binary directly so local MCP registration uses the latest rebuilt executable.
+- Removed the stale README note claiming the repository could not be compile-verified in its original generation environment.
+- Added explicit extension-point guidance to repo-level agent instruction files so future changes follow the `IToolHandler<TRequest>`, `IResourceHandler`, `IPromptHandler`, Autofac, and application-abstraction seams already documented in the architecture guide.
+- Updated GitHub repository topics to improve discoverability for MCP, LM Studio, GitHub Copilot, JSON-RPC, and SSH automation use cases.
+
+### Validation
+
+- `gh run view 24493206070 --json status,conclusion,url,jobs,displayTitle,headSha,updatedAt`
+
 ## 0.1.3 - 2026-04-15
 
 Patch release adding profile-based SSH automation tools for remote DevOps workflows.

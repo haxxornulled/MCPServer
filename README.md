@@ -9,8 +9,8 @@ Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Current Release
 
-`v0.1.3` is the current validated release.
-It adds SSH-based remote automation profiles and tools alongside the existing local workspace and LM Studio integration improvements.
+`v0.1.4` is the current validated release.
+It adds release-polish updates around LM Studio launch guidance, repository metadata, and agent extension-point instructions on top of the SSH and local tooling work.
 
 ## Highlights
 
