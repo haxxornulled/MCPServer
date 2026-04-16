@@ -51,13 +51,7 @@ Windows example:
 {
 	"mcpServers": {
 		"mcpserver-filesystem": {
-			"command": "dotnet",
-			"args": [
-				"run",
-				"--project",
-				"D:/McpServerRepo/src/McpServer.Host/McpServer.Host.csproj",
-				"--no-build"
-			]
+			"command": "D:/McpServerRepo/src/McpServer.Host/bin/Release/net10.0/McpServer.Host.exe"
 		}
 	}
 }
@@ -65,9 +59,10 @@ Windows example:
 
 Recommended workflow:
 
-1. Build the host once before connecting from LM Studio.
+1. Build the host in `Release` before connecting from LM Studio so the executable path points at the newest binary.
 2. In LM Studio, open the MCP settings and add the server entry to `mcp.json`.
-3. Restart the MCP server from LM Studio after rebuilding.
+3. Restart the MCP server from LM Studio after every rebuild so it picks up the latest executable.
+4. If you prefer `Debug` during development, change the path explicitly to `bin/Debug/net10.0/McpServer.Host.exe` rather than relying on `dotnet run`.
 
 Compatibility notes:
 
