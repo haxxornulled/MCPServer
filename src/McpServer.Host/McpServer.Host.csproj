@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <RootNamespace>McpServer.Host</RootNamespace>
+    <AssemblyName>McpServer.Host</AssemblyName>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Autofac" />
+    <PackageReference Include="Autofac.Extensions.DependencyInjection" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\McpServer.Protocol\McpServer.Protocol.csproj" />
+    <ProjectReference Include="..\McpServer.Application\McpServer.Application.csproj" />
+    <ProjectReference Include="..\McpServer.Infrastructure\McpServer.Infrastructure.csproj" />
+    <ProjectReference Include="..\McpServer.Contracts\McpServer.Contracts.csproj" />
+  </ItemGroup>
+</Project>

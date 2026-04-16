@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>McpServer.Domain</RootNamespace>
+    <AssemblyName>McpServer.Domain</AssemblyName>
+  </PropertyGroup>
+</Project>

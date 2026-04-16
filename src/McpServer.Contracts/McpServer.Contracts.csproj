@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>McpServer.Contracts</RootNamespace>
+    <AssemblyName>McpServer.Contracts</AssemblyName>
+  </PropertyGroup>
+</Project>

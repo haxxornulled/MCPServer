@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="src/McpServer.Domain/McpServer.Domain.csproj" />
+  <Project Path="src/McpServer.Contracts/McpServer.Contracts.csproj" />
+  <Project Path="src/McpServer.Application/McpServer.Application.csproj" />
+  <Project Path="src/McpServer.Protocol/McpServer.Protocol.csproj" />
+  <Project Path="src/McpServer.Infrastructure/McpServer.Infrastructure.csproj" />
+  <Project Path="src/McpServer.Host/McpServer.Host.csproj" />
+  <Project Path="tests/McpServer.UnitTests/McpServer.UnitTests.csproj" />
+  <Project Path="tests/McpServer.IntegrationTests/McpServer.IntegrationTests.csproj" />
+</Solution>

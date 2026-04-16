@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>McpServer.Application</RootNamespace>
+    <AssemblyName>McpServer.Application</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LanguageExt.Core" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\McpServer.Domain\McpServer.Domain.csproj" />
+    <ProjectReference Include="..\McpServer.Contracts\McpServer.Contracts.csproj" />
+  </ItemGroup>
+</Project>

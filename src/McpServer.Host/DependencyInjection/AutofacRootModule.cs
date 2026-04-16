@@ -1,0 +1,87 @@
+using Autofac;
+using McpServer.Application.Abstractions.Files;
+using McpServer.Application.Abstractions.Mcp;
+using McpServer.Application.Abstractions.Web;
+using McpServer.Application.Mcp.Prompts;
+using McpServer.Application.Mcp.Resources;
+using McpServer.Application.Mcp.Tools;
+using McpServer.Host.Configuration;
+using McpServer.Infrastructure.Files;
+using McpServer.Infrastructure.Web;
+using McpServer.Protocol.Lifecycle;
+using McpServer.Protocol.Routing;
+using McpServer.Protocol.Session;
+
+namespace McpServer.Host.DependencyInjection;
+
+public sealed class AutofacRootModule(IConfiguration configuration) : Module
+{
+    protected override void Load(ContainerBuilder builder)
+    {
+        var options = configuration.GetSection(McpServerOptions.SectionName).Get<McpServerOptions>() ?? new McpServerOptions();
+
+        builder.RegisterInstance(options).AsSelf().SingleInstance();
+
+        builder.RegisterType<McpSession>().SingleInstance();
+        builder.RegisterType<CapabilityProvider>().SingleInstance();
+        builder.RegisterType<InitializeHandler>().SingleInstance();
+        builder.RegisterType<ShutdownHandler>().SingleInstance();
+        builder.RegisterType<ExitHandler>().SingleInstance();
+        builder.RegisterType<ToolCallRouter>().SingleInstance();
+        builder.RegisterType<ResourceReadRouter>().SingleInstance();
+        builder.RegisterType<PromptRouter>().SingleInstance();
+
+        builder.RegisterType<FileMutationLockProvider>()
+            .As<IFileMutationLockProvider>()
+            .SingleInstance();
+
+        builder.RegisterType<ResourcePathTranslator>()
+            .As<IResourcePathTranslator>()
+            .SingleInstance();
+
+        builder.Register(ctx =>
+            {
+                var workspace = Path.GetFullPath(options.Workspace.RootPath);
+                Directory.CreateDirectory(workspace);
+                return new PathPolicy([workspace]);
+            })
+            .As<IPathPolicy>()
+            .SingleInstance();
+
+        builder.RegisterType<FileSystemService>()
+            .As<IFileSystemService>()
+            .SingleInstance();
+
+        builder.RegisterType<FsWriteTextToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsAppendTextToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsCreateDirectoryToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsMovePathToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsCopyPathToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsDeletePathToolHandler>().AsSelf().SingleInstance();
+
+        builder.RegisterType<FsFileTextResourceHandler>().As<IResourceHandler>().SingleInstance();
+        builder.RegisterType<FsDirectoryResourceHandler>().As<IResourceHandler>().SingleInstance();
+        builder.RegisterType<FsFileMetadataResourceHandler>().As<IResourceHandler>().SingleInstance();
+
+        builder.RegisterType<SummarizeFilePromptHandler>().As<IPromptHandler>().SingleInstance();
+        builder.RegisterType<ReviewDirectoryPromptHandler>().As<IPromptHandler>().SingleInstance();
+
+        if (options.WebAccess.Enabled)
+        {
+            builder.Register(ctx =>
+                {
+                    var allowedHosts = options.WebAccess.AllowedHosts
+                        .Where(static x => !string.IsNullOrWhiteSpace(x))
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    return new WebPolicy(allowedHosts);
+                })
+                .As<IWebPolicy>()
+                .SingleInstance();
+
+            builder.RegisterType<WebAccessService>().As<IWebAccessService>().SingleInstance();
+            builder.RegisterType<WebFetchToolHandler>().AsSelf().SingleInstance();
+            builder.RegisterType<WebSearchToolHandler>().AsSelf().SingleInstance();
+        }
+    }
+}
