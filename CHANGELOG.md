@@ -1,0 +1,33 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## 0.1.0 - 2026-04-15
+
+Initial release of the MCP server scaffold.
+
+### Added
+
+- Cleanly layered solution structure across Host, Protocol, Application, Infrastructure, Contracts, and Domain projects.
+- STDIO-based MCP host with JSON-RPC request/response transport.
+- MCP lifecycle handling for initialize, initialized, shutdown, and exit flows.
+- Filesystem MCP tools for write, append, create directory, move, copy, and delete operations.
+- Filesystem MCP resources for file text, directory listing, and file metadata reads.
+- Prompt support for summarizing files and reviewing directories.
+- Optional web access services and MCP tools for URL fetch and web search.
+- Autofac-based dependency injection and Serilog-based logging bootstrap.
+- Unit and integration test coverage for transport, routing, lifecycle, and host startup flows.
+- Architecture documentation in `docs/architecture.md`.
+- Public API and method inventory in `docs/method-summary.md`.
+
+### Changed
+
+- Corrected shared MSBuild configuration so the solution loads, restores, and builds correctly under the installed .NET 10 SDK.
+- Fixed multiple protocol, application, infrastructure, host, and test compilation issues across the initial scaffold.
+- Replaced `FluentAssertions` with xUnit assertions to keep the test stack fully open source.
+
+### Validation
+
+- `dotnet build .\McpServer.slnx -v minimal`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -v minimal`
+- `dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -v minimal`

@@ -29,3 +29,4 @@ This repo was generated in an environment without the .NET SDK installed, so the
 
 - [Architecture](docs/architecture.md)
 - [Method Summary](docs/method-summary.md)
+- [Changelog](CHANGELOG.md)
