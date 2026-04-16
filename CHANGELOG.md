@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.1.6 - 2026-04-16
 
 ### Added
 
@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Added package metadata and README guidance for installing `McpServer.Host` as a `dotnet tool` from the repository's GitHub Packages feed.
+
+### Validation
+
+- `dotnet build .\McpServer.slnx -c Release --no-restore -v minimal`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -c Release --no-build -v minimal`
+- `dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -c Release --no-build -v minimal`
+- `dotnet pack .\src\McpServer.Host\McpServer.Host.csproj -c Release --no-build -p:PackageVersion=0.1.6 -o .\artifacts\nuget`
 
 ## 0.1.5 - 2026-04-16
 

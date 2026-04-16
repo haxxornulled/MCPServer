@@ -9,8 +9,8 @@ Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Current Release
 
-`v0.1.5` is the current validated release.
-It adds inference-driven MCP tool smoke testing, cleaner harness diagnostics, and dependency-aware scenario execution on top of the prior LM Studio, SSH, and release-polish work.
+`v0.1.6` is the current validated release.
+It adds GitHub Packages publishing for the `McpServer.Host` .NET tool, package install guidance, and the prior inference-driven MCP smoke testing and release-polish work.
 
 ## Highlights
 
@@ -62,13 +62,13 @@ dotnet nuget add source https://nuget.pkg.github.com/haxxornulled/index.json --n
 Install the current tool version:
 
 ```powershell
-dotnet tool install --global McpServer.Host --version 0.1.5 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
+dotnet tool install --global McpServer.Host --version 0.1.6 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
 ```
 
 Update an existing install:
 
 ```powershell
-dotnet tool update --global McpServer.Host --version 0.1.5 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
+dotnet tool update --global McpServer.Host --version 0.1.6 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
 ```
 
 After installation, run `mcpserver`.
