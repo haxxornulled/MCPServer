@@ -9,8 +9,8 @@ Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Current Release
 
-`v0.1.4` is the current validated release.
-It adds release-polish updates around LM Studio launch guidance, repository metadata, and agent extension-point instructions on top of the SSH and local tooling work.
+`v0.1.5` is the current validated release.
+It adds inference-driven MCP tool smoke testing, cleaner harness diagnostics, and dependency-aware scenario execution on top of the prior LM Studio, SSH, and release-polish work.
 
 ## Highlights
 
@@ -72,6 +72,42 @@ Compatibility notes:
 - The server can optionally expose `ssh.exec` and `ssh.write_text` when SSH profiles are enabled in configuration.
 - `shell.exec` accepts both `workspace` and LM Studio's `/mcpserver-filesystem` alias as workspace roots for `workingDirectory`.
 - Logs are written to stderr and `logs/`, not stdout, so stdio MCP traffic stays clean.
+
+## Inference Tool Smoke Testing
+
+The repository includes a PowerShell harness that tests the registered MCP tools through an OpenAI-compatible inference endpoint such as LM Studio running at `http://192.168.96.1:1234`.
+
+Default command:
+
+```powershell
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1
+```
+
+What it does:
+
+- starts the MCP host over stdio using the latest built host executable when available
+- initializes the MCP session and reads `tools/list`
+- converts each MCP tool schema into an OpenAI tool definition
+- asks the inference model to call each tool using ordered scenarios from `scripts/inference-tool-scenarios.json`
+- executes the resulting `tools/call` requests against the real MCP server and verifies the tool responses
+- prints per-tool pass, fail, or skip results immediately so long-running suites stay debuggable
+
+Notes:
+
+- The default scenarios cover the core registered tools in the default host configuration: filesystem tools plus `shell.exec`.
+- The default scenarios are ordered and dependency-aware, so downstream tools are skipped with an explicit reason if an earlier prerequisite scenario fails.
+- Optional tools such as `ssh.exec`, `ssh.write_text`, `web.fetch_url`, and `web.search` can be tested by enabling them in host configuration and extending `scripts/inference-tool-scenarios.json`.
+- If the Release host executable is missing, the script falls back to `dotnet run --project ... --no-build`.
+
+Useful options:
+
+```powershell
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -ListToolsOnly
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -IncludeTool shell.exec
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -AllowMissingScenarios
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -Model openai/gpt-oss-20b
+pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -Model openai/gpt-oss-20b -InferenceTimeoutSeconds 180
+```
 
 ## SSH Automation
 

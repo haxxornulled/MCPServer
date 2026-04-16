@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.5 - 2026-04-16
+
+### Added
+
+- Added `scripts/Invoke-InferenceToolSmokeTest.ps1` to validate registered MCP tools through an OpenAI-compatible inference endpoint such as LM Studio.
+- Added ordered default inference scenarios in `scripts/inference-tool-scenarios.json` for the core filesystem and `shell.exec` tool set.
+
+### Changed
+
+- Hardened the inference smoke-test harness with dependency-aware scenario skips, immediate per-tool pass/fail output, and clearer failure details for malformed model arguments or MCP error payloads.
+
+### Validation
+
+- `dotnet restore .\McpServer.slnx`
+- `dotnet build .\McpServer.slnx -c Release --no-restore -v minimal`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -c Release --no-build -v minimal`
+- `dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -c Release --no-build -v minimal`
+- `pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -Model google/gemma-4-26b-a4b -InferenceTimeoutSeconds 180 -ResultPath .\inference-smoke-results.json`
+
 ## 0.1.4 - 2026-04-16
 
 Patch release aligning repository metadata, LM Studio guidance, and agent-extension policy with the current validated server behavior.

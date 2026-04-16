@@ -6,3 +6,6 @@ logs/
 *.lscache
 *.log
 src/McpServer.Host/workspace/
+artifacts/
+inference-smoke-results.json
+tmp-inference-smoke-console.txt
