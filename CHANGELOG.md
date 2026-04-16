@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.1 - 2026-04-15
+
+Patch release fixing workspace path resolution for filesystem tools and resources.
+
+### Fixed
+
+- Aligned filesystem tool path handling with the configured workspace root so relative tool paths resolve correctly.
+- Fixed resource URI translation for `file:///workspace/...` and `dir:///workspace` so MCP resource reads map into the host workspace.
+- Registered path policy and resource URI translation from the same resolved workspace root to eliminate runtime path mismatches.
+
+### Added
+
+- Unit tests covering workspace-relative path normalization and resource URI translation.
+- Integration coverage for an end-to-end `fs.write_text` plus `resources/read` round-trip.
+
+### Validation
+
+- `dotnet build .\McpServer.slnx -v minimal`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -v minimal --no-build`
+- `dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -v minimal`
+
 ## 0.1.0 - 2026-04-15
 
 Initial release of the MCP server scaffold.

@@ -19,6 +19,9 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
     protected override void Load(ContainerBuilder builder)
     {
         var options = configuration.GetSection(McpServerOptions.SectionName).Get<McpServerOptions>() ?? new McpServerOptions();
+        var workspace = Path.GetFullPath(options.Workspace.RootPath);
+
+        Directory.CreateDirectory(workspace);
 
         builder.RegisterInstance(options).AsSelf().SingleInstance();
 
@@ -35,16 +38,11 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             .As<IFileMutationLockProvider>()
             .SingleInstance();
 
-        builder.RegisterType<ResourcePathTranslator>()
+        builder.Register(_ => new ResourcePathTranslator(workspace))
             .As<IResourcePathTranslator>()
             .SingleInstance();
 
-        builder.Register(ctx =>
-            {
-                var workspace = Path.GetFullPath(options.Workspace.RootPath);
-                Directory.CreateDirectory(workspace);
-                return new PathPolicy([workspace]);
-            })
+        builder.Register(_ => new PathPolicy([workspace]))
             .As<IPathPolicy>()
             .SingleInstance();
 
