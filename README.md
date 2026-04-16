@@ -41,6 +41,38 @@ Run the host:
 dotnet run --project .\src\McpServer.Host\McpServer.Host.csproj
 ```
 
+## GitHub Packages
+
+The host is also published as a .NET tool package to GitHub Packages on version tags.
+
+Package details:
+
+- Package ID: `McpServer.Host`
+- Command name: `mcpserver`
+- Feed: `https://nuget.pkg.github.com/haxxornulled/index.json`
+
+Authentication requires a GitHub token with `read:packages`.
+
+Add the feed:
+
+```powershell
+dotnet nuget add source https://nuget.pkg.github.com/haxxornulled/index.json --name github-haxxornulled --username YOUR_GITHUB_USERNAME --password YOUR_GITHUB_TOKEN --store-password-in-clear-text
+```
+
+Install the current tool version:
+
+```powershell
+dotnet tool install --global McpServer.Host --version 0.1.5 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
+```
+
+Update an existing install:
+
+```powershell
+dotnet tool update --global McpServer.Host --version 0.1.5 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
+```
+
+After installation, run `mcpserver`.
+
 ## LM Studio
 
 LM Studio supports local MCP programs via `mcp.json`. This server uses the MCP stdio transport, so you can register it as a local program.
@@ -63,6 +95,8 @@ Recommended workflow:
 2. In LM Studio, open the MCP settings and add the server entry to `mcp.json`.
 3. Restart the MCP server from LM Studio after every rebuild so it picks up the latest executable.
 4. If you prefer `Debug` during development, change the path explicitly to `bin/Debug/net10.0/McpServer.Host.exe` rather than relying on `dotnet run`.
+
+If you install from GitHub Packages instead of using a local build, point LM Studio at the installed `mcpserver` command rather than the repository output path.
 
 Compatibility notes:
 

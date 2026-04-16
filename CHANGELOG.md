@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added GitHub Packages publishing for the `McpServer.Host` .NET tool package on version tag builds in CI.
+
+### Changed
+
+- Added package metadata and README guidance for installing `McpServer.Host` as a `dotnet tool` from the repository's GitHub Packages feed.
+
 ## 0.1.5 - 2026-04-16
 
 ### Added

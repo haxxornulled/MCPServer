@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
@@ -11,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   build-and-test:
@@ -36,3 +39,19 @@ jobs:
 
       - name: Integration Tests
         run: dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -c Release --no-build -v minimal
+
+      - name: Compute Package Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $packageVersion = "${{ github.ref_name }}".TrimStart('v')
+          "PACKAGE_VERSION=$packageVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Pack Tool Package
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: dotnet pack .\src\McpServer.Host\McpServer.Host.csproj -c Release --no-build -p:PackageVersion=$env:PACKAGE_VERSION -o .\artifacts\nuget
+
+      - name: Publish Tool Package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: dotnet nuget push .\artifacts\nuget\*.nupkg --source https://nuget.pkg.github.com/haxxornulled/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
