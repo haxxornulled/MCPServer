@@ -3,12 +3,14 @@ using McpServer.Application.Abstractions.Files;
 using McpServer.Application.Abstractions.Mcp;
 using McpServer.Application.Abstractions.Web;
 using McpServer.Application.Abstractions.Execution;
+using McpServer.Application.Abstractions.Ssh;
 using McpServer.Application.Mcp.Prompts;
 using McpServer.Application.Mcp.Resources;
 using McpServer.Application.Mcp.Tools;
 using McpServer.Infrastructure.Execution;
 using McpServer.Host.Configuration;
 using McpServer.Infrastructure.Files;
+using McpServer.Infrastructure.Ssh;
 using McpServer.Infrastructure.Web;
 using McpServer.Protocol.Lifecycle;
 using McpServer.Protocol.Routing;
@@ -88,6 +90,19 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             builder.RegisterType<WebFetchToolHandler>().AsSelf().SingleInstance();
             builder.RegisterType<WebSearchToolHandler>().AsSelf().SingleInstance();
         }
+
+        if (options.Ssh.Enabled && options.Ssh.Profiles.Length > 0)
+        {
+            builder.Register(ctx => new SshService(
+                    CreateConfiguredProfiles(options.Ssh.Profiles),
+                    AppContext.BaseDirectory,
+                    ctx.Resolve<ILogger<SshService>>()))
+                .As<ISshService>()
+                .SingleInstance();
+
+            builder.RegisterType<SshExecToolHandler>().AsSelf().SingleInstance();
+            builder.RegisterType<SshWriteTextToolHandler>().AsSelf().SingleInstance();
+        }
     }
 
     private static string ResolveWorkspacePath(string rootPath)
@@ -99,4 +114,20 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
 
         return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, rootPath));
     }
+
+    private static ConfiguredSshProfile[] CreateConfiguredProfiles(IEnumerable<SshProfileOptions> profiles) =>
+        profiles
+            .Where(static profile => !string.IsNullOrWhiteSpace(profile.Name))
+            .Select(static profile => new ConfiguredSshProfile(
+                profile.Name,
+                profile.Host,
+                profile.Port,
+                profile.Username,
+                profile.PasswordEnvironmentVariable,
+                profile.PrivateKeyPath,
+                profile.PrivateKeyPassphraseEnvironmentVariable,
+                profile.WorkingDirectory,
+                profile.HostKeySha256,
+                profile.AcceptUnknownHostKey))
+            .ToArray();
 }

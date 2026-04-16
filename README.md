@@ -9,8 +9,8 @@ Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Current Release
 
-`v0.1.2` is the current validated release.
-It adds LM Studio compatibility fixes, `shell.exec` for workspace-scoped command execution, and more robust host startup/path handling for external MCP clients.
+`v0.1.3` is the current validated release.
+It adds SSH-based remote automation profiles and tools alongside the existing local workspace and LM Studio integration improvements.
 
 ## Highlights
 
@@ -76,8 +76,72 @@ Compatibility notes:
 - The server negotiates MCP protocol versions and falls back to `2025-03-26` for unknown client versions to stay compatible with current MCP hosts such as LM Studio.
 - The server supports `ping`, which some MCP hosts use as a connection health check.
 - The server exposes `shell.exec` for non-interactive command execution inside the configured workspace.
+- The server can optionally expose `ssh.exec` and `ssh.write_text` when SSH profiles are enabled in configuration.
 - `shell.exec` accepts both `workspace` and LM Studio's `/mcpserver-filesystem` alias as workspace roots for `workingDirectory`.
 - Logs are written to stderr and `logs/`, not stdout, so stdio MCP traffic stays clean.
+
+## SSH Automation
+
+For remote DevOps-style work, configure named SSH profiles in `appsettings.json` and keep secrets in environment variables.
+
+Example:
+
+```json
+{
+	"McpServer": {
+		"Ssh": {
+			"Enabled": true,
+			"Profiles": [
+				{
+					"Name": "prod-web",
+					"Host": "10.0.0.10",
+					"Port": 22,
+					"Username": "deploy",
+					"PrivateKeyPath": "./secrets/prod-web-id_ed25519",
+					"WorkingDirectory": "/home/deploy",
+					"HostKeySha256": "SHA256:replace-with-server-host-key"
+				},
+				{
+					"Name": "db-admin",
+					"Host": "10.0.0.25",
+					"Port": 22,
+					"Username": "ops",
+					"PasswordEnvironmentVariable": "MCPSERVER_DB_ADMIN_PASSWORD",
+					"WorkingDirectory": "/home/ops",
+					"HostKeySha256": "SHA256:replace-with-server-host-key"
+				}
+			]
+		}
+	}
+}
+```
+
+Remote tooling notes:
+
+- `ssh.exec` runs a non-interactive POSIX shell command on a configured profile and returns exit code, stdout, and stderr.
+- `ssh.write_text` writes a remote text file over SFTP and can create parent directories and apply octal permissions.
+- For package installs and service changes, configure passwordless `sudo` for the remote account if you need unattended automation.
+- By default, host keys should be pinned with `HostKeySha256`. `AcceptUnknownHostKey` exists for controlled lab environments but is not recommended for production.
+
+Example MCP calls:
+
+Install and start nginx:
+
+```json
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"ssh.exec","arguments":{"profile":"prod-web","command":"sudo apt-get update && sudo apt-get install -y nginx && sudo systemctl enable --now nginx","timeoutSeconds":900}}}
+```
+
+Write an nginx site config:
+
+```json
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"ssh.write_text","arguments":{"profile":"prod-web","path":"/etc/nginx/sites-available/app.conf","content":"server { listen 80; server_name _; location / { proxy_pass http://127.0.0.1:5000; } }","permissions":"644"}}}
+```
+
+Install PostgreSQL and create a database:
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"ssh.exec","arguments":{"profile":"db-admin","command":"sudo apt-get update && sudo apt-get install -y postgresql && sudo systemctl enable --now postgresql && sudo -u postgres createdb appdb","timeoutSeconds":900}}}
+```
 
 Then send newline-delimited JSON-RPC messages over stdio.
 

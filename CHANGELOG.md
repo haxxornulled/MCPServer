@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.3 - 2026-04-15
+
+Patch release adding profile-based SSH automation tools for remote DevOps workflows.
+
+### Added
+
+- Added optional SSH profile configuration with host, port, username, environment-variable-based credentials, host key pinning, and default working directory support.
+- Added `ssh.exec` for remote non-interactive shell command execution on configured SSH hosts.
+- Added `ssh.write_text` for writing remote configuration files over SFTP with optional parent-directory creation and octal permissions.
+- Added focused unit coverage for SSH tool handlers and SSH profile validation behavior.
+
+### Changed
+
+- Updated dependency injection and tool routing so SSH tools are only exposed when SSH profiles are enabled and configured.
+- Updated README and architecture/method documentation to describe the new remote automation path and production-safe SSH configuration patterns.
+
+### Validation
+
+- `dotnet build .\src\McpServer.Host\McpServer.Host.csproj -c Debug`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -c Debug --filter "FullyQualifiedName~Ssh"`
+
 ## 0.1.2 - 2026-04-15
 
 Patch release focused on LM Studio compatibility and general workspace-scoped command execution.

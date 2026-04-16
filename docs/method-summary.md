@@ -175,6 +175,13 @@ Primary constructors are not listed as methods.
 | `IWebAccessService` | `FetchUrlAsync(FetchUrlCommand, CancellationToken)` | Fetches a URL and returns extracted page data. |
 | `IWebAccessService` | `SearchWebAsync(SearchWebCommand, CancellationToken)` | Executes a web search and returns summarized hits. |
 
+### Abstractions: SSH
+
+| Type | Member | Summary |
+| --- | --- | --- |
+| `ISshService` | `ExecuteAsync(ExecuteSshCommand, CancellationToken)` | Executes a non-interactive shell command against a configured SSH profile. |
+| `ISshService` | `WriteTextAsync(WriteSshTextCommand, CancellationToken)` | Writes a remote text file over SFTP against a configured SSH profile. |
+
 ### Prompt handlers
 
 | Type | Member | Summary |
@@ -227,6 +234,12 @@ Primary constructors are not listed as methods.
 | `ShellExecToolHandler` | `Name` / `Description` | Advertises the `shell.exec` tool. |
 | `ShellExecToolHandler` | `GetInputSchema()` | Returns the command-execution input schema. |
 | `ShellExecToolHandler` | `Handle(ShellExecRequest, CancellationToken)` | Executes a non-interactive command in the validated workspace and returns structured output. |
+| `SshExecToolHandler` | `Name` / `Description` | Advertises the `ssh.exec` tool. |
+| `SshExecToolHandler` | `GetInputSchema()` | Returns the SSH command-execution input schema. |
+| `SshExecToolHandler` | `Handle(SshExecRequest, CancellationToken)` | Executes a non-interactive shell command over SSH and returns structured output. |
+| `SshWriteTextToolHandler` | `Name` / `Description` | Advertises the `ssh.write_text` tool. |
+| `SshWriteTextToolHandler` | `GetInputSchema()` | Returns the remote file-write input schema. |
+| `SshWriteTextToolHandler` | `Handle(SshWriteTextRequest, CancellationToken)` | Writes a remote text file over SFTP and returns a structured summary. |
 | `WebFetchToolHandler` | `Name` / `Description` | Advertises the `web.fetch_url` tool. |
 | `WebFetchToolHandler` | `GetInputSchema()` | Returns the fetch-url input schema. |
 | `WebFetchToolHandler` | `Handle(WebFetchUrlRequest, CancellationToken)` | Fetches a URL and maps the result into MCP content. |
@@ -242,6 +255,8 @@ Primary constructors are not listed as methods.
 | `Files/Results/FileResults.cs` | Public result records returned by file operations. Data carriers only. |
 | `Execution/Commands/ProcessCommands.cs` | Public command records for process execution requests. Data carriers only. |
 | `Execution/Results/ProcessResults.cs` | Public result records returned by process execution. Data carriers only. |
+| `Ssh/Commands/SshCommands.cs` | Public command records for SSH execution and remote file writes. Data carriers only. |
+| `Ssh/Results/SshResults.cs` | Public result records returned by SSH operations. Data carriers only. |
 | `Web/Commands/WebCommands.cs` | Public command records for web operations. Data carriers only. |
 | `Web/Results/WebResults.cs` | Public result records returned by web operations. Data carriers only. |
 
@@ -264,6 +279,8 @@ Primary constructors are not listed as methods.
 | `FileSystemService` | `CopyPathAsync(CopyPathCommand, CancellationToken)` | Copies files or directories. |
 | `FileSystemService` | `DeletePathAsync(DeletePathCommand, CancellationToken)` | Deletes files or directories. |
 | `ProcessExecutionService` | `RunAsync(RunProcessCommand, CancellationToken)` | Executes a non-interactive process with validated working directory, timeout, and output capture. |
+| `SshService` | `ExecuteAsync(ExecuteSshCommand, CancellationToken)` | Executes a non-interactive command against a configured SSH profile and captures output. |
+| `SshService` | `WriteTextAsync(WriteSshTextCommand, CancellationToken)` | Uploads text content to a remote file over SFTP and can apply permissions. |
 | `WebPolicy` | `MaxResponseBytes` | Max response size allowed for web fetches. |
 | `WebPolicy` | `DefaultTimeout` | Default outbound timeout. |
 | `WebPolicy` | `MaxRedirects` | Max redirect hops. |
@@ -311,6 +328,7 @@ They validate:
 - stdio request/response framing
 - initialize, ping, and prompt routing behavior
 - workspace-scoped shell command execution
+- SSH command and remote file tool behavior
 - path comparison semantics
 - web tool mapping
 - end-to-end stdio initialize response shape

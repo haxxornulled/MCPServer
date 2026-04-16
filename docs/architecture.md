@@ -43,8 +43,8 @@ flowchart TD
 | --- | --- | --- |
 | `src/McpServer.Host` | Starts the process, wires dependencies, hosts the stdio request loop, configures Serilog and `HttpClient` instances. | `StdioServerHostedService`, `StdioMessageTransport`, `AutofacRootModule`, `McpServerOptions` |
 | `src/McpServer.Protocol` | Owns MCP lifecycle, session state, JSON-RPC models, and routing for tools, resources, and prompts. | `McpSession`, `InitializeHandler`, `ShutdownHandler`, `ExitHandler`, `ToolCallRouter`, `ResourceReadRouter`, `PromptRouter` |
-| `src/McpServer.Application` | Defines application-facing abstractions and concrete handlers for filesystem tools, command execution, resources, and prompts. | `IToolHandler<TRequest>`, `IResourceHandler`, `IPromptHandler`, filesystem tool handlers, `ShellExecToolHandler`, prompt handlers, resource handlers |
-| `src/McpServer.Infrastructure` | Implements file access, path validation, per-path locking, process execution, web access, HTML extraction, and logging bootstrap. | `FileSystemService`, `PathPolicy`, `FileMutationLockProvider`, `ResourcePathTranslator`, `ProcessExecutionService`, `WebAccessService`, `WebPolicy`, `SerilogBootstrap` |
+| `src/McpServer.Application` | Defines application-facing abstractions and concrete handlers for filesystem tools, local command execution, SSH automation, resources, and prompts. | `IToolHandler<TRequest>`, `IResourceHandler`, `IPromptHandler`, filesystem tool handlers, `ShellExecToolHandler`, `SshExecToolHandler`, `SshWriteTextToolHandler`, prompt handlers, resource handlers |
+| `src/McpServer.Infrastructure` | Implements file access, path validation, per-path locking, local process execution, SSH automation, web access, HTML extraction, and logging bootstrap. | `FileSystemService`, `PathPolicy`, `FileMutationLockProvider`, `ResourcePathTranslator`, `ProcessExecutionService`, `SshService`, `WebAccessService`, `WebPolicy`, `SerilogBootstrap` |
 | `src/McpServer.Contracts` | Defines serialized DTOs and request/response contracts used over MCP/JSON-RPC. | lifecycle, tool, resource, prompt, and content DTO records |
 | `src/McpServer.Domain` | Reserved for future domain entities or business rules. | `Placeholder` |
 | `tests/*` | Unit and integration validation. | xUnit test suites and stdio integration harness |
@@ -63,6 +63,7 @@ flowchart TD
 - routers as singletons
 - filesystem services and policies
 - process execution services
+- SSH services and SSH tool handlers when SSH profiles are enabled
 - all filesystem tool handlers
 - the `shell.exec` tool handler
 - all resource handlers
@@ -144,6 +145,11 @@ The host also exposes:
 
 - `shell.exec` for non-interactive command execution inside the validated workspace root
 
+When SSH is enabled, the host also exposes:
+
+- `ssh.exec` for non-interactive remote shell commands against configured SSH profiles
+- `ssh.write_text` for remote config/script file writes over SFTP
+
 Web tools are optional and only registered when `McpServer:WebAccess:Enabled` is `true`:
 
 - `web.fetch_url`
@@ -193,6 +199,10 @@ The filesystem implementation in `FileSystemService` is intentionally policy-dri
 ### Process execution
 
 `ProcessExecutionService` runs non-interactive commands with validated working directories, captured stdout/stderr, bounded output, and timeout enforcement. This keeps `shell.exec` workspace-scoped and predictable for MCP hosts.
+
+### SSH execution
+
+`SshService` runs non-interactive POSIX shell commands and SFTP file writes against named SSH profiles supplied by host configuration. Profiles are intended to keep remote host details stable while secrets remain in environment variables and host keys stay pinned by SHA-256 fingerprints.
 
 ### Concurrency control
 
@@ -250,6 +260,7 @@ The solution consistently uses `LanguageExt.Fin<T>` for non-exceptional failures
 - router behavior
 - stdio framing
 - `shell.exec` result mapping
+- SSH tool result mapping and profile validation
 - path comparison semantics
 - web tool result mapping
 
