@@ -46,4 +46,25 @@ public sealed class PathPolicyTests
             Fail: error => throw new InvalidOperationException(error.Message));
         Assert.Equal(Path.Combine(workspace, "nested", "file.txt"), normalized);
     }
+
+    [Fact]
+    public void NormalizeAndValidateWritePath_Should_Treat_LmStudio_Server_Alias_As_Virtual_Root()
+    {
+        var workspace = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "mcpserver-pathpolicy-tests", Guid.NewGuid().ToString("N")));
+        Directory.CreateDirectory(workspace);
+
+        var sut = new PathPolicy([workspace]);
+
+        var result = sut.NormalizeAndValidateWritePath("/mcpserver-filesystem/nested/file.txt");
+
+        Assert.True(
+            result.IsSucc,
+            result.Match(
+                Succ: value => value,
+                Fail: error => error.Message));
+        var normalized = result.Match(
+            Succ: value => value,
+            Fail: error => throw new InvalidOperationException(error.Message));
+        Assert.Equal(Path.Combine(workspace, "nested", "file.txt"), normalized);
+    }
 }

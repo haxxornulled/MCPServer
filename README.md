@@ -9,8 +9,8 @@ Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Current Release
 
-`v0.1.1` is the current validated release.
-It includes the workspace path resolution fix that makes filesystem tool calls and `file:///workspace/...` resource reads work end to end.
+`v0.1.2` is the current validated release.
+It adds LM Studio compatibility fixes, `shell.exec` for workspace-scoped command execution, and more robust host startup/path handling for external MCP clients.
 
 ## Highlights
 
@@ -43,6 +43,42 @@ Run the host:
 dotnet run --project .\src\McpServer.Host\McpServer.Host.csproj
 ```
 
+## LM Studio
+
+LM Studio supports local MCP programs via `mcp.json`. This server uses the MCP stdio transport, so you can register it as a local program.
+
+Windows example:
+
+```json
+{
+	"mcpServers": {
+		"mcpserver-filesystem": {
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"D:/McpServerRepo/src/McpServer.Host/McpServer.Host.csproj",
+				"--no-build"
+			]
+		}
+	}
+}
+```
+
+Recommended workflow:
+
+1. Build the host once before connecting from LM Studio.
+2. In LM Studio, open the MCP settings and add the server entry to `mcp.json`.
+3. Restart the MCP server from LM Studio after rebuilding.
+
+Compatibility notes:
+
+- The server negotiates MCP protocol versions and falls back to `2025-03-26` for unknown client versions to stay compatible with current MCP hosts such as LM Studio.
+- The server supports `ping`, which some MCP hosts use as a connection health check.
+- The server exposes `shell.exec` for non-interactive command execution inside the configured workspace.
+- `shell.exec` accepts both `workspace` and LM Studio's `/mcpserver-filesystem` alias as workspace roots for `workingDirectory`.
+- Logs are written to stderr and `logs/`, not stdout, so stdio MCP traffic stays clean.
+
 Then send newline-delimited JSON-RPC messages over stdio.
 
 Initialize the MCP session:
@@ -58,6 +94,12 @@ Write a file into the configured workspace:
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fs.write_text","arguments":{"path":"smoke.txt","content":"hello from MCP","overwrite":true}}}
 ```
 
+Run a workspace-scoped command:
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"shell.exec","arguments":{"command":"dotnet","args":["--version"],"timeoutSeconds":30}}}
+```
+
 Read that file back through MCP resources:
 
 ```json
@@ -67,7 +109,7 @@ Read that file back through MCP resources:
 Expected success shape:
 
 ```json
-{"jsonrpc":"2.0","id":3,"result":{"contents":[{"uri":"file:///workspace/smoke.txt","mimeType":"text/plain","text":"hello from MCP"}]},"error":null}
+{"jsonrpc":"2.0","id":3,"result":{"contents":[{"uri":"file:///workspace/smoke.txt","mimeType":"text/plain","text":"hello from MCP"}]}}
 ```
 
 ## Documentation

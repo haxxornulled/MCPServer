@@ -44,4 +44,24 @@ public sealed class StdioMessageTransportTests
 
         Assert.EndsWith("\n", text);
     }
+
+    [Fact]
+    public async Task WriteResponseAsync_Should_Omit_Null_Error_Field_From_Success_Response()
+    {
+        var input = new MemoryStream();
+        var output = new MemoryStream();
+        var logger = Substitute.For<ILogger<StdioMessageTransport>>();
+
+        await using var transport = new StdioMessageTransport(input, output, logger);
+        var id = JsonDocument.Parse("1").RootElement.Clone();
+        var response = new JsonRpcResponse("2.0", id, Result: new { ok = true });
+
+        await transport.WriteResponseAsync(response, CancellationToken.None);
+
+        output.Position = 0;
+        using var reader = new StreamReader(output, Encoding.UTF8);
+        var text = await reader.ReadToEndAsync();
+
+        Assert.DoesNotContain("\"error\":null", text, StringComparison.Ordinal);
+    }
 }

@@ -2,9 +2,11 @@ using Autofac;
 using McpServer.Application.Abstractions.Files;
 using McpServer.Application.Abstractions.Mcp;
 using McpServer.Application.Abstractions.Web;
+using McpServer.Application.Abstractions.Execution;
 using McpServer.Application.Mcp.Prompts;
 using McpServer.Application.Mcp.Resources;
 using McpServer.Application.Mcp.Tools;
+using McpServer.Infrastructure.Execution;
 using McpServer.Host.Configuration;
 using McpServer.Infrastructure.Files;
 using McpServer.Infrastructure.Web;
@@ -19,7 +21,7 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
     protected override void Load(ContainerBuilder builder)
     {
         var options = configuration.GetSection(McpServerOptions.SectionName).Get<McpServerOptions>() ?? new McpServerOptions();
-        var workspace = Path.GetFullPath(options.Workspace.RootPath);
+        var workspace = ResolveWorkspacePath(options.Workspace.RootPath);
 
         Directory.CreateDirectory(workspace);
 
@@ -50,12 +52,17 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             .As<IFileSystemService>()
             .SingleInstance();
 
+        builder.RegisterType<ProcessExecutionService>()
+            .As<IProcessExecutionService>()
+            .SingleInstance();
+
         builder.RegisterType<FsWriteTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsAppendTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCreateDirectoryToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsMovePathToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCopyPathToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsDeletePathToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<ShellExecToolHandler>().AsSelf().SingleInstance();
 
         builder.RegisterType<FsFileTextResourceHandler>().As<IResourceHandler>().SingleInstance();
         builder.RegisterType<FsDirectoryResourceHandler>().As<IResourceHandler>().SingleInstance();
@@ -81,5 +88,15 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             builder.RegisterType<WebFetchToolHandler>().AsSelf().SingleInstance();
             builder.RegisterType<WebSearchToolHandler>().AsSelf().SingleInstance();
         }
+    }
+
+    private static string ResolveWorkspacePath(string rootPath)
+    {
+        if (Path.IsPathRooted(rootPath))
+        {
+            return Path.GetFullPath(rootPath);
+        }
+
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, rootPath));
     }
 }

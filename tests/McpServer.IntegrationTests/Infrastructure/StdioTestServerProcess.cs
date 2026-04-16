@@ -29,6 +29,12 @@ public sealed class StdioTestServerProcess : IAsyncDisposable
     }
 
     public static async Task<StdioTestServerProcess> StartAsync(string projectPath, CancellationToken ct = default)
+        => await StartAsync(projectPath, workingDirectory: null, ct).ConfigureAwait(false);
+
+    public static async Task<StdioTestServerProcess> StartAsync(
+        string projectPath,
+        string? workingDirectory,
+        CancellationToken ct = default)
     {
         var configuration = GetCurrentConfiguration();
         var psi = new ProcessStartInfo
@@ -44,6 +50,11 @@ public sealed class StdioTestServerProcess : IAsyncDisposable
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            psi.WorkingDirectory = workingDirectory;
+        }
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 

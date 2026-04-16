@@ -15,6 +15,7 @@ public sealed class ToolCallRouter(
     FsMovePathToolHandler movePathHandler,
     FsCopyPathToolHandler copyPathHandler,
     FsDeletePathToolHandler deletePathHandler,
+    ShellExecToolHandler shellExecHandler,
     WebFetchToolHandler? webFetchHandler = null,
     WebSearchToolHandler? webSearchHandler = null)
 {
@@ -27,7 +28,8 @@ public sealed class ToolCallRouter(
             ToToolDto(createDirectoryHandler),
             ToToolDto(movePathHandler),
             ToToolDto(copyPathHandler),
-            ToToolDto(deletePathHandler)
+            ToToolDto(deletePathHandler),
+            ToToolDto(shellExecHandler)
         };
 
         if (webFetchHandler is not null)
@@ -53,6 +55,7 @@ public sealed class ToolCallRouter(
             "fs.move_path" => await CallMovePathAsync(arguments, ct).ConfigureAwait(false),
             "fs.copy_path" => await CallCopyPathAsync(arguments, ct).ConfigureAwait(false),
             "fs.delete_path" => await CallDeletePathAsync(arguments, ct).ConfigureAwait(false),
+            "shell.exec" => await CallShellExecAsync(arguments, ct).ConfigureAwait(false),
             "web.fetch_url" when webFetchHandler is not null => await CallWebFetchAsync(arguments, ct).ConfigureAwait(false),
             "web.search" when webSearchHandler is not null => await CallWebSearchAsync(arguments, ct).ConfigureAwait(false),
             _ => Error.New($"Unknown tool: {name}")
@@ -116,6 +119,14 @@ public sealed class ToolCallRouter(
         return request is null
             ? Error.New("Invalid arguments for fs.delete_path")
             : await deletePathHandler.Handle(request, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask<Fin<CallToolResult>> CallShellExecAsync(JsonElement arguments, CancellationToken ct)
+    {
+        var request = arguments.Deserialize<ShellExecRequest>();
+        return request is null
+            ? Error.New("Invalid arguments for shell.exec")
+            : await shellExecHandler.Handle(request, ct).ConfigureAwait(false);
     }
 
     private async ValueTask<Fin<CallToolResult>> CallWebFetchAsync(JsonElement arguments, CancellationToken ct)

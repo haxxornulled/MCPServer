@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.2 - 2026-04-15
+
+Patch release focused on LM Studio compatibility and general workspace-scoped command execution.
+
+### Added
+
+- Added the `shell.exec` MCP tool for non-interactive command execution inside the configured workspace, including structured exit code, stdout, stderr, timeout, and truncation details.
+- Added unit and integration coverage for `shell.exec`, `ping`, JSON-RPC success response shape, protocol negotiation fallback, and LM Studio virtual workspace aliases.
+- Added README guidance for registering the server in LM Studio and invoking the new command tool.
+
+### Changed
+
+- Updated MCP protocol negotiation to preserve supported versions and fall back to `2025-03-26` for unknown client versions so current LM Studio builds can connect successfully.
+- Added `ping` handling in the stdio host for MCP clients that probe server health before using tools.
+- Switched host content-root and workspace resolution to `AppContext.BaseDirectory` so the server still works when launched from unrelated working directories.
+- Omitted null JSON-RPC response fields on successful calls to keep the transport compliant with stricter MCP hosts.
+- Expanded workspace path handling to treat both `/workspace/...` and LM Studio's `/mcpserver-filesystem/...` alias as the same virtual root.
+
+### Validation
+
+- `dotnet build .\src\McpServer.Host\McpServer.Host.csproj -c Debug`
+- `dotnet test .\tests\McpServer.UnitTests\McpServer.UnitTests.csproj -c Debug --filter "FullyQualifiedName~PathPolicyTests|FullyQualifiedName~InitializeHandlerTests|FullyQualifiedName~StdioMessageTransportTests|FullyQualifiedName~ShellExecToolHandlerTests"`
+- `dotnet test .\tests\McpServer.IntegrationTests\McpServer.IntegrationTests.csproj -c Debug --filter "FullyQualifiedName~StdioLifecycleIntegrationTests"`
+
 ## 0.1.1 - 2026-04-15
 
 Patch release fixing workspace path resolution for filesystem tools and resources.

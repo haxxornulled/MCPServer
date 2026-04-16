@@ -99,6 +99,7 @@ public sealed class StdioServerHostedService(
             return request.Method switch
             {
                 "initialize" => DispatchResult.WithResponse(HandleInitialize(request, session, initializeHandler)),
+                "ping" => DispatchResult.WithResponse(HandlePing(request)),
                 "notifications/initialized" => DispatchResult.WithResponse(HandleInitialized(request, session)),
                 "shutdown" => DispatchResult.WithResponse(HandleShutdown(request, session, shutdownHandler)),
                 "exit" => DispatchResult.Exit(HandleExit(session, exitHandler)),
@@ -153,6 +154,9 @@ public sealed class StdioServerHostedService(
             Succ: _ => null,
             Fail: e => JsonRpcErrorFactory.ServerError(request.Id, e.Message));
     }
+
+    private static JsonRpcResponse HandlePing(JsonRpcRequest request) =>
+        new("2.0", request.Id, Result: new Dictionary<string, object?>());
 
     private static JsonRpcResponse HandleShutdown(
         JsonRpcRequest request,

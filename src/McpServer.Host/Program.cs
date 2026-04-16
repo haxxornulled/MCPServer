@@ -8,6 +8,7 @@ using Serilog;
 using System.Net;
 
 var builder = Host.CreateDefaultBuilder(args)
+    .UseContentRoot(AppContext.BaseDirectory)
     .UseServiceProviderFactory(new AutofacServiceProviderFactory())
     .UseSerilog((context, services, configuration) =>
     {

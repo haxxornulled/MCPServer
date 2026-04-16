@@ -6,6 +6,8 @@ namespace McpServer.Infrastructure.Files;
 
 public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
 {
+    private static readonly string[] WorkspaceAliases = ["workspace", "mcpserver-filesystem"];
+
     private readonly string[] _roots = allowedRoots
         .Select(Path.GetFullPath)
         .Select(static p => TrimTrailingSeparators(p))
@@ -78,18 +80,19 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
 
         normalized = normalized.TrimStart(Path.DirectorySeparatorChar);
 
-        const string workspaceSegment = "workspace";
-
-        if (normalized.Equals(workspaceSegment, StringComparison.OrdinalIgnoreCase))
+        foreach (var alias in WorkspaceAliases)
         {
-            relativePath = string.Empty;
-            return true;
-        }
+            if (normalized.Equals(alias, StringComparison.OrdinalIgnoreCase))
+            {
+                relativePath = string.Empty;
+                return true;
+            }
 
-        if (normalized.StartsWith(workspaceSegment + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-        {
-            relativePath = normalized[(workspaceSegment.Length + 1)..];
-            return true;
+            if (normalized.StartsWith(alias + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                relativePath = normalized[(alias.Length + 1)..];
+                return true;
+            }
         }
 
         relativePath = string.Empty;

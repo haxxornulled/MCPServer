@@ -3,3 +3,6 @@ obj/
 .vs/
 TestResults/
 logs/
+*.lscache
+*.log
+src/McpServer.Host/workspace/

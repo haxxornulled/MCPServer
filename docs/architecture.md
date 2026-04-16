@@ -43,8 +43,8 @@ flowchart TD
 | --- | --- | --- |
 | `src/McpServer.Host` | Starts the process, wires dependencies, hosts the stdio request loop, configures Serilog and `HttpClient` instances. | `StdioServerHostedService`, `StdioMessageTransport`, `AutofacRootModule`, `McpServerOptions` |
 | `src/McpServer.Protocol` | Owns MCP lifecycle, session state, JSON-RPC models, and routing for tools, resources, and prompts. | `McpSession`, `InitializeHandler`, `ShutdownHandler`, `ExitHandler`, `ToolCallRouter`, `ResourceReadRouter`, `PromptRouter` |
-| `src/McpServer.Application` | Defines application-facing abstractions and concrete handlers for filesystem tools, resources, and prompts. | `IToolHandler<TRequest>`, `IResourceHandler`, `IPromptHandler`, filesystem tool handlers, prompt handlers, resource handlers |
-| `src/McpServer.Infrastructure` | Implements file access, path validation, per-path locking, web access, HTML extraction, and logging bootstrap. | `FileSystemService`, `PathPolicy`, `FileMutationLockProvider`, `ResourcePathTranslator`, `WebAccessService`, `WebPolicy`, `SerilogBootstrap` |
+| `src/McpServer.Application` | Defines application-facing abstractions and concrete handlers for filesystem tools, command execution, resources, and prompts. | `IToolHandler<TRequest>`, `IResourceHandler`, `IPromptHandler`, filesystem tool handlers, `ShellExecToolHandler`, prompt handlers, resource handlers |
+| `src/McpServer.Infrastructure` | Implements file access, path validation, per-path locking, process execution, web access, HTML extraction, and logging bootstrap. | `FileSystemService`, `PathPolicy`, `FileMutationLockProvider`, `ResourcePathTranslator`, `ProcessExecutionService`, `WebAccessService`, `WebPolicy`, `SerilogBootstrap` |
 | `src/McpServer.Contracts` | Defines serialized DTOs and request/response contracts used over MCP/JSON-RPC. | lifecycle, tool, resource, prompt, and content DTO records |
 | `src/McpServer.Domain` | Reserved for future domain entities or business rules. | `Placeholder` |
 | `tests/*` | Unit and integration validation. | xUnit test suites and stdio integration harness |
@@ -62,7 +62,9 @@ flowchart TD
 - lifecycle/session services as singletons
 - routers as singletons
 - filesystem services and policies
+- process execution services
 - all filesystem tool handlers
+- the `shell.exec` tool handler
 - all resource handlers
 - all prompt handlers
 - optional web policy, web access service, and web tool handlers when enabled in configuration
@@ -76,6 +78,7 @@ flowchart TD
 Each request is dispatched by JSON-RPC method name:
 
 - `initialize`
+- `ping`
 - `notifications/initialized`
 - `shutdown`
 - `exit`
@@ -101,7 +104,11 @@ Most routed operations require `session.IsReady == true` before execution.
 
 ### Initialize
 
-`InitializeHandler` validates the requested protocol version, updates `McpSession`, and returns advertised server capabilities from `CapabilityProvider`.
+`InitializeHandler` negotiates the requested protocol version, updates `McpSession`, and returns advertised server capabilities from `CapabilityProvider`. Supported versions are preserved exactly, while unknown client versions fall back to `2025-03-26` for compatibility with current LM Studio builds.
+
+### Ping
+
+`StdioServerHostedService` handles `ping` directly and returns an empty result object so MCP hosts can perform lightweight health checks.
 
 ### Initialized notification
 
@@ -132,6 +139,10 @@ Filesystem tools are always available:
 - `fs.move_path`
 - `fs.copy_path`
 - `fs.delete_path`
+
+The host also exposes:
+
+- `shell.exec` for non-interactive command execution inside the validated workspace root
 
 Web tools are optional and only registered when `McpServer:WebAccess:Enabled` is `true`:
 
@@ -173,11 +184,15 @@ The filesystem implementation in `FileSystemService` is intentionally policy-dri
 
 ### Path validation
 
-`PathPolicy` normalizes all paths and rejects anything outside configured allowed roots.
+`PathPolicy` normalizes all paths and rejects anything outside configured allowed roots. For MCP-facing paths it treats both `/workspace/...` and `/mcpserver-filesystem/...` as the same virtual workspace root so LM Studio can pass its server alias without breaking file or command tools.
 
 ### URI translation
 
 `ResourcePathTranslator` accepts `file`, `dir`, and `filemeta` schemes and converts them to local paths.
+
+### Process execution
+
+`ProcessExecutionService` runs non-interactive commands with validated working directories, captured stdout/stderr, bounded output, and timeout enforcement. This keeps `shell.exec` workspace-scoped and predictable for MCP hosts.
 
 ### Concurrency control
 
@@ -234,10 +249,11 @@ The solution consistently uses `LanguageExt.Fin<T>` for non-exceptional failures
 - lifecycle handling
 - router behavior
 - stdio framing
+- `shell.exec` result mapping
 - path comparison semantics
 - web tool result mapping
 
-`tests/McpServer.IntegrationTests` validates end-to-end stdio startup and initialization shape against the host project.
+`tests/McpServer.IntegrationTests` validates end-to-end stdio startup, initialization shape, unrelated working-directory launches, ping handling, JSON-RPC response shape, and `shell.exec` execution against the host project.
 
 ## Extension Points
 

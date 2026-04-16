@@ -57,7 +57,7 @@ Primary constructors are not listed as methods.
 
 | Type | Member | Summary |
 | --- | --- | --- |
-| `InitializeHandler` | `Handle(InitializeRequestDto, McpSession)` | Validates the requested protocol version, updates session state, and returns the initialize response payload. |
+| `InitializeHandler` | `Handle(InitializeRequestDto, McpSession)` | Negotiates the requested protocol version, updates session state, and returns the initialize response payload. |
 
 ### `Lifecycle/ShutdownHandler.cs`
 
@@ -161,6 +161,7 @@ Primary constructors are not listed as methods.
 | `IFileSystemService` | `MovePathAsync(MovePathCommand, CancellationToken)` | Moves a file or directory. |
 | `IFileSystemService` | `CopyPathAsync(CopyPathCommand, CancellationToken)` | Copies a file or directory. |
 | `IFileSystemService` | `DeletePathAsync(DeletePathCommand, CancellationToken)` | Deletes a file or directory. |
+| `IProcessExecutionService` | `RunAsync(RunProcessCommand, CancellationToken)` | Runs a non-interactive process within the validated workspace and returns captured execution details. |
 
 ### Abstractions: Web
 
@@ -223,6 +224,9 @@ Primary constructors are not listed as methods.
 | `FsDeletePathToolHandler` | `Name` / `Description` | Advertises the `fs.delete_path` tool. |
 | `FsDeletePathToolHandler` | `GetInputSchema()` | Returns the delete-path input schema. |
 | `FsDeletePathToolHandler` | `Handle(DeletePathRequest, CancellationToken)` | Deletes a file or directory within allowed roots. |
+| `ShellExecToolHandler` | `Name` / `Description` | Advertises the `shell.exec` tool. |
+| `ShellExecToolHandler` | `GetInputSchema()` | Returns the command-execution input schema. |
+| `ShellExecToolHandler` | `Handle(ShellExecRequest, CancellationToken)` | Executes a non-interactive command in the validated workspace and returns structured output. |
 | `WebFetchToolHandler` | `Name` / `Description` | Advertises the `web.fetch_url` tool. |
 | `WebFetchToolHandler` | `GetInputSchema()` | Returns the fetch-url input schema. |
 | `WebFetchToolHandler` | `Handle(WebFetchUrlRequest, CancellationToken)` | Fetches a URL and maps the result into MCP content. |
@@ -236,6 +240,8 @@ Primary constructors are not listed as methods.
 | --- | --- |
 | `Files/Commands/FileCommands.cs` | Public command records for file service operations. Data carriers only. |
 | `Files/Results/FileResults.cs` | Public result records returned by file operations. Data carriers only. |
+| `Execution/Commands/ProcessCommands.cs` | Public command records for process execution requests. Data carriers only. |
+| `Execution/Results/ProcessResults.cs` | Public result records returned by process execution. Data carriers only. |
 | `Web/Commands/WebCommands.cs` | Public command records for web operations. Data carriers only. |
 | `Web/Results/WebResults.cs` | Public result records returned by web operations. Data carriers only. |
 
@@ -257,6 +263,7 @@ Primary constructors are not listed as methods.
 | `FileSystemService` | `MovePathAsync(MovePathCommand, CancellationToken)` | Moves files or directories. |
 | `FileSystemService` | `CopyPathAsync(CopyPathCommand, CancellationToken)` | Copies files or directories. |
 | `FileSystemService` | `DeletePathAsync(DeletePathCommand, CancellationToken)` | Deletes files or directories. |
+| `ProcessExecutionService` | `RunAsync(RunProcessCommand, CancellationToken)` | Executes a non-interactive process with validated working directory, timeout, and output capture. |
 | `WebPolicy` | `MaxResponseBytes` | Max response size allowed for web fetches. |
 | `WebPolicy` | `DefaultTimeout` | Default outbound timeout. |
 | `WebPolicy` | `MaxRedirects` | Max redirect hops. |
@@ -302,7 +309,8 @@ The test projects expose public test classes but do not define reusable applicat
 They validate:
 
 - stdio request/response framing
-- initialize and prompt routing behavior
+- initialize, ping, and prompt routing behavior
+- workspace-scoped shell command execution
 - path comparison semantics
 - web tool mapping
 - end-to-end stdio initialize response shape
