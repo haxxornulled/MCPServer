@@ -26,8 +26,6 @@ It adds SSH-based remote automation profiles and tools alongside the existing lo
 
 ## Notes
 
-This repo was generated in an environment without the .NET SDK installed, so the source tree could not be compile-verified here. The design and project graph were written to be buildable in Visual Studio 2026 / .NET 10.
-
 ## First run
 
 1. Open `McpServer.slnx` in Visual Studio 2026.
