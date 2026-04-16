@@ -9,6 +9,11 @@ public sealed class StdioLifecycleIntegrationTests
     private static string HostProjectPath =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "McpServer.Host", "McpServer.Host.csproj"));
 
+    private static string CurrentConfiguration =>
+        AppContext.BaseDirectory.Contains($"{Path.DirectorySeparatorChar}Release{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+            ? "Release"
+            : "Debug";
+
     [Fact]
     public async Task Initialize_Response_Should_Match_Typed_Shape()
     {
@@ -125,7 +130,7 @@ public sealed class StdioLifecycleIntegrationTests
             var expectedWorkspaceFile = Path.Combine(
                 Path.GetDirectoryName(HostProjectPath)!,
                 "bin",
-                "Debug",
+                CurrentConfiguration,
                 "net10.0",
                 "workspace",
                 "lmstudio-smoke.txt");
