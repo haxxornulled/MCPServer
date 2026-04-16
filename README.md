@@ -1,5 +1,9 @@
 # McpServer
 
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![C%23 14](https://img.shields.io/badge/C%23-14-239120?logo=csharp)](https://learn.microsoft.com/dotnet/csharp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Production-oriented MCP server starter for .NET 10 / C# 14 / Visual Studio 2026.
 
 ## Highlights
@@ -30,3 +34,7 @@ This repo was generated in an environment without the .NET SDK installed, so the
 - [Architecture](docs/architecture.md)
 - [Method Summary](docs/method-summary.md)
 - [Changelog](CHANGELOG.md)
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
