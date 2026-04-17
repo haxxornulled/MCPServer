@@ -112,14 +112,14 @@ public sealed class SshService(
         }
     }
 
-    public async ValueTask<Fin<SshWriteTextResult>> WriteTextAsync(WriteSshTextCommand command, CancellationToken ct)
+    public async ValueTask<Fin<SshFileWriteResult>> WriteTextAsync(WriteSshTextCommand command, CancellationToken ct)
     {
         try
         {
             var profile = ResolveProfile(command.Profile);
             if (profile.IsFail)
             {
-                return PropagateFailure<SshWriteTextResult>(profile);
+                return PropagateFailure<SshFileWriteResult>(profile);
             }
 
             var resolvedProfile = profile.Match(
@@ -138,11 +138,9 @@ public sealed class SshService(
                 }
 
                 var remoteDirectory = GetRemoteDirectory(remotePath);
-                var createdDirectories = false;
-
                 if (command.CreateDirectories && !string.IsNullOrWhiteSpace(remoteDirectory))
                 {
-                    createdDirectories = EnsureDirectoryExists(client, remoteDirectory) || createdDirectories;
+                    EnsureDirectoryExists(client, remoteDirectory);
                 }
 
                 var existed = client.Exists(remotePath);
@@ -156,23 +154,20 @@ public sealed class SshService(
                 using var ms = new MemoryStream(bytes, writable: false);
                 client.UploadFile(ms, remotePath, canOverride: command.Overwrite);
 
-                string? permissionsApplied = null;
                 if (!string.IsNullOrWhiteSpace(command.Permissions))
                 {
-                    permissionsApplied = NormalizePermissions(command.Permissions);
+                    var permissionsApplied = NormalizePermissions(command.Permissions);
                     client.ChangePermissions(remotePath, Convert.ToInt16(permissionsApplied, 8));
                 }
 
-                return new SshWriteTextResult(
+                return new SshFileWriteResult(
                     resolvedProfile.Name,
                     resolvedProfile.Host,
                     resolvedProfile.Port,
                     resolvedProfile.Username,
                     remotePath,
                     bytes.LongLength,
-                    Overwritten: existed,
-                    CreatedDirectories: createdDirectories,
-                    PermissionsApplied: permissionsApplied);
+                    Success: true);
             }, ct).ConfigureAwait(false);
 
             logger.LogInformation(

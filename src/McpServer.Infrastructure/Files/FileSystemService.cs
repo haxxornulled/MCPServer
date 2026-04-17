@@ -7,6 +7,8 @@ using McpServer.Application.Files.Results;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
 
+using DirectoryEntry = McpServer.Application.Files.DirectoryEntry;
+
 namespace McpServer.Infrastructure.Files;
 
 public sealed class FileSystemService(
@@ -31,7 +33,7 @@ public sealed class FileSystemService(
                 return Error.New($"File not found: {path}");
             }
 
-            var encoding = command.Encoding ?? Encoding.UTF8;
+            var encoding = ResolveEncoding(command.Encoding);
 
             await using var stream = new FileStream(
                 path,
@@ -52,7 +54,7 @@ public sealed class FileSystemService(
 
             logger.LogInformation("Read text file {NormalizedPath} length {Length}", path, stream.Length);
 
-            return new FileTextResult(path, content, encoding.WebName, stream.Length);
+            return new FileTextResult(path, content);
         }
         catch (OperationCanceledException)
         {
@@ -83,39 +85,18 @@ public sealed class FileSystemService(
             }
 
             var entries = Directory
-                .EnumerateFileSystemEntries(path, command.SearchPattern, SearchOption.TopDirectoryOnly)
+                .EnumerateFileSystemEntries(path, command.SearchPattern ?? "*", SearchOption.TopDirectoryOnly)
                 .Select(entryPath =>
                 {
                     var attributes = File.GetAttributes(entryPath);
                     var isDirectory = (attributes & FileAttributes.Directory) != 0;
-
-                    long? size = null;
-                    DateTimeOffset lastWrite;
-
-                    if (isDirectory)
-                    {
-                        var info = new DirectoryInfo(entryPath);
-                        lastWrite = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
-                    }
-                    else
-                    {
-                        var info = new FileInfo(entryPath);
-                        size = info.Length;
-                        lastWrite = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
-                    }
-
-                    return new DirectoryEntryResult(
-                        Name: Path.GetFileName(entryPath),
-                        FullPath: entryPath,
-                        IsDirectory: isDirectory,
-                        Size: size,
-                        LastWriteTimeUtc: lastWrite);
+                    return new DirectoryEntry(Path.GetFileName(entryPath), isDirectory);
                 })
                 .ToArray();
 
             logger.LogInformation("Listed directory {NormalizedPath} with {EntryCount} entries", path, entries.Length);
 
-            return ValueTask.FromResult<Fin<DirectoryListingResult>>(new DirectoryListingResult(path, entries));
+                return ValueTask.FromResult<Fin<DirectoryListingResult>>(new DirectoryListingResult(path, entries));
         }
         catch (Exception ex)
         {
@@ -144,8 +125,8 @@ public sealed class FileSystemService(
                     Exists: true,
                     IsDirectory: false,
                     Size: info.Length,
-                    CreationTimeUtc: new DateTimeOffset(info.CreationTimeUtc, TimeSpan.Zero),
-                    LastWriteTimeUtc: new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                    CreationTime: info.CreationTime,
+                    LastWriteTime: info.LastWriteTime,
                     Attributes: info.Attributes.ToString()));
             }
 
@@ -157,12 +138,19 @@ public sealed class FileSystemService(
                     Exists: true,
                     IsDirectory: true,
                     Size: null,
-                    CreationTimeUtc: new DateTimeOffset(info.CreationTimeUtc, TimeSpan.Zero),
-                    LastWriteTimeUtc: new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                    CreationTime: info.CreationTime,
+                    LastWriteTime: info.LastWriteTime,
                     Attributes: info.Attributes.ToString()));
             }
 
-            return ValueTask.FromResult<Fin<FileMetadataResult>>(new FileMetadataResult(path, false, false, null, null, null, null));
+            return ValueTask.FromResult<Fin<FileMetadataResult>>(new FileMetadataResult(
+                path,
+                false,
+                false,
+                null,
+                DateTime.MinValue,
+                DateTime.MinValue,
+                string.Empty));
         }
         catch (Exception ex)
         {
@@ -171,12 +159,12 @@ public sealed class FileSystemService(
         }
     }
 
-    public async ValueTask<Fin<Unit>> WriteTextAsync(WriteFileTextCommand command, CancellationToken ct)
+    public async ValueTask<Fin<FileTextResult>> WriteTextAsync(WriteFileTextCommand command, CancellationToken ct)
     {
         var normalized = pathPolicy.NormalizeAndValidateWritePath(command.Path);
         if (normalized.IsFail)
         {
-            return PropagateFailure<Unit>(normalized);
+            return PropagateFailure<FileTextResult>(normalized);
         }
 
         var path = GetPathOrThrow(normalized);
@@ -186,27 +174,12 @@ public sealed class FileSystemService(
         {
             EnsureDestinationParentExists(path);
 
-            var encoding = ResolveEncoding(command.EncodingName);
-            var bytes = encoding.GetBytes(command.Content);
+            var encoding = ResolveEncoding(command.Encoding);
+            await File.WriteAllTextAsync(path, command.Content, encoding, ct).ConfigureAwait(false);
 
-            await using var stream = new FileStream(
-                path,
-                command.Overwrite ? FileMode.Create : FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.Read,
-                bufferSize: 64 * 1024,
-                options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            logger.LogInformation("Wrote text file {NormalizedPath} bytes {ByteLength}", path, command.Content.Length);
 
-            await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
-
-            if (command.Flush)
-            {
-                await stream.FlushAsync(ct).ConfigureAwait(false);
-            }
-
-            logger.LogInformation("Wrote text file {NormalizedPath} bytes {ByteLength}", path, bytes.Length);
-
-            return unit;
+            return new FileTextResult(path, command.Content);
         }
         catch (OperationCanceledException)
         {
@@ -219,12 +192,12 @@ public sealed class FileSystemService(
         }
     }
 
-    public async ValueTask<Fin<Unit>> AppendTextAsync(AppendFileTextCommand command, CancellationToken ct)
+    public async ValueTask<Fin<FileTextResult>> AppendTextAsync(AppendFileTextCommand command, CancellationToken ct)
     {
         var normalized = pathPolicy.NormalizeAndValidateWritePath(command.Path);
         if (normalized.IsFail)
         {
-            return PropagateFailure<Unit>(normalized);
+            return PropagateFailure<FileTextResult>(normalized);
         }
 
         var path = GetPathOrThrow(normalized);
@@ -234,7 +207,7 @@ public sealed class FileSystemService(
         {
             EnsureDestinationParentExists(path);
 
-            var encoding = ResolveEncoding(command.EncodingName);
+            var encoding = ResolveEncoding(command.Encoding);
             var bytes = encoding.GetBytes(command.Content);
 
             await using var stream = new FileStream(
@@ -253,7 +226,7 @@ public sealed class FileSystemService(
             }
 
             logger.LogInformation("Appended text file {NormalizedPath} bytes {ByteLength}", path, bytes.Length);
-            return unit;
+            return new FileTextResult(path, command.Content);
         }
         catch (OperationCanceledException)
         {

@@ -15,19 +15,18 @@ public sealed class WebFetchToolHandlerTests
     public async Task Handle_Should_Return_Text_Content()
     {
         var web = Substitute.For<IWebAccessService>();
-        var logger = Substitute.For<ILogger<WebFetchToolHandler>>();
+        var logger = Substitute.For<ILogger<WebFetchUrlToolHandler>>();
 
         web.FetchUrlAsync(Arg.Any<McpServer.Application.Web.Commands.FetchUrlCommand>(), Arg.Any<CancellationToken>())
             .Returns(new ValueTask<Fin<FetchedPageResult>>(new FetchedPageResult(
                 Url: "https://example.com",
-                StatusCode: 200,
-                ContentType: "text/html",
                 Title: "Example",
-                Text: "Hello world",
-                RawBody: null,
-                Links: Array.Empty<string>())));
+                Content: "Hello world",
+                ContentType: "text/html",
+                StatusCode: 200,
+                FetchTimeMs: 10)));
 
-        var handler = new WebFetchToolHandler(web, logger);
+        var handler = new WebFetchUrlToolHandler(web, logger);
         var result = await handler.Handle(new WebFetchUrlRequest("https://example.com"), CancellationToken.None);
 
         Assert.True(result.IsSucc);

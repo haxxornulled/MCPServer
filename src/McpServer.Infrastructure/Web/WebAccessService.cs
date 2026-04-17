@@ -27,7 +27,10 @@ public sealed class WebAccessService(
         try
         {
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linkedCts.CancelAfter(command.Timeout ?? webPolicy.DefaultTimeout);
+            linkedCts.CancelAfter(
+                command.TimeoutSeconds.HasValue
+                    ? TimeSpan.FromSeconds(command.TimeoutSeconds.Value)
+                    : webPolicy.DefaultTimeout);
 
             var client = httpClientFactory.CreateClient("web-access");
 
@@ -65,13 +68,10 @@ public sealed class WebAccessService(
             string? text = null;
             string? rawBody = null;
             string? title = null;
-            IReadOnlyList<string> links = Array.Empty<string>();
 
             if (contentType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true)
             {
                 title = HtmlTextExtractor.ExtractTitle(body);
-                links = HtmlTextExtractor.ExtractLinks(body, new Uri(command.Url));
-
                 if (command.ExtractReadableText)
                 {
                     text = HtmlTextExtractor.ExtractReadableText(body);
@@ -94,12 +94,11 @@ public sealed class WebAccessService(
 
             return new FetchedPageResult(
                 Url: command.Url,
+                Title: title ?? string.Empty,
+                Content: text ?? rawBody ?? body,
+                ContentType: contentType ?? string.Empty,
                 StatusCode: (int)response.StatusCode,
-                ContentType: contentType,
-                Title: title,
-                Text: text,
-                RawBody: rawBody,
-                Links: links);
+                FetchTimeMs: 0);
         }
         catch (OperationCanceledException)
         {
@@ -112,7 +111,7 @@ public sealed class WebAccessService(
         }
     }
 
-    public async ValueTask<Fin<IReadOnlyList<SearchHitResult>>> SearchWebAsync(SearchWebCommand command, CancellationToken ct)
+    public async ValueTask<Fin<IReadOnlyList<WebSearchResult>>> SearchWebAsync(SearchWebCommand command, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Query))
         {
@@ -138,12 +137,13 @@ public sealed class WebAccessService(
             var body = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
             var text = HtmlTextExtractor.ExtractReadableText(body);
 
-            IReadOnlyList<SearchHitResult> results =
+            IReadOnlyList<WebSearchResult> results =
             [
-                new SearchHitResult(
+                new WebSearchResult(
                     Title: $"Search results for: {command.Query}",
                     Url: requestUri,
-                    Snippet: text.Length > 300 ? text[..300] : text)
+                    Snippet: text.Length > 300 ? text[..300] : text,
+                    Relevance: 1.0)
             ];
 
             logger.LogInformation("Executed web search for query {Query}", command.Query);

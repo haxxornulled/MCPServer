@@ -136,7 +136,7 @@ public sealed class ProcessExecutionService(
             CreateNoWindow = true
         };
 
-        foreach (var argument in command.Arguments)
+        foreach (var argument in command.Arguments ?? Array.Empty<string>())
         {
             startInfo.ArgumentList.Add(argument);
         }

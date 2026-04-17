@@ -1,19 +1,26 @@
-using LanguageExt;
 using System.Text.Json;
+using LanguageExt;
 
-namespace McpServer.Application.Abstractions.Mcp;
-
-public interface IToolHandler<in TRequest>
+namespace McpServer.Application.Abstractions.Mcp
 {
-    string Name { get; }
-    string Description { get; }
-    JsonElement GetInputSchema();
-    ValueTask<Fin<CallToolResult>> Handle(TRequest request, CancellationToken ct);
+    public interface IToolHandler
+    {
+        string Name { get; }
+        string Description { get; }
+        JsonElement GetInputSchema();
+    }
+
+    public interface IToolHandler<TRequest> : IToolHandler
+    {
+        ValueTask<Fin<CallToolResult>> Handle(TRequest request, CancellationToken ct);
+    }
+
+    public record CallToolResult(
+        IReadOnlyList<ContentItem> Content,
+        object? StructuredContent = null,
+        bool IsError = false);
+
+    public record ContentItem(
+        string Type,
+        string Text);
 }
-
-public sealed record CallToolResult(
-    IReadOnlyList<ContentItem> Content,
-    object? StructuredContent = null,
-    bool? IsError = null);
-
-public sealed record ContentItem(string Type, string Text);

@@ -16,9 +16,9 @@ public sealed class ToolCallRouter(
     FsCopyPathToolHandler copyPathHandler,
     FsDeletePathToolHandler deletePathHandler,
     ShellExecToolHandler shellExecHandler,
-    SshExecToolHandler? sshExecHandler = null,
+    SshExecuteToolHandler? sshExecuteHandler = null,
     SshWriteTextToolHandler? sshWriteTextHandler = null,
-    WebFetchToolHandler? webFetchHandler = null,
+    WebFetchUrlToolHandler? webFetchHandler = null,
     WebSearchToolHandler? webSearchHandler = null)
 {
     public ListToolsResult ListTools()
@@ -34,9 +34,9 @@ public sealed class ToolCallRouter(
             ToToolDto(shellExecHandler)
         };
 
-        if (sshExecHandler is not null)
+        if (sshExecuteHandler is not null)
         {
-            tools.Add(ToToolDto(sshExecHandler));
+            tools.Add(ToToolDto(sshExecuteHandler));
         }
 
         if (sshWriteTextHandler is not null)
@@ -68,7 +68,7 @@ public sealed class ToolCallRouter(
             "fs.copy_path" => await CallCopyPathAsync(arguments, ct).ConfigureAwait(false),
             "fs.delete_path" => await CallDeletePathAsync(arguments, ct).ConfigureAwait(false),
             "shell.exec" => await CallShellExecAsync(arguments, ct).ConfigureAwait(false),
-            "ssh.exec" when sshExecHandler is not null => await CallSshExecAsync(arguments, ct).ConfigureAwait(false),
+            "ssh.execute" when sshExecuteHandler is not null => await CallSshExecuteAsync(arguments, ct).ConfigureAwait(false),
             "ssh.write_text" when sshWriteTextHandler is not null => await CallSshWriteTextAsync(arguments, ct).ConfigureAwait(false),
             "web.fetch_url" when webFetchHandler is not null => await CallWebFetchAsync(arguments, ct).ConfigureAwait(false),
             "web.search" when webSearchHandler is not null => await CallWebSearchAsync(arguments, ct).ConfigureAwait(false),
@@ -89,7 +89,7 @@ public sealed class ToolCallRouter(
 
     private async ValueTask<Fin<CallToolResult>> CallWriteTextAsync(JsonElement arguments, CancellationToken ct)
     {
-        var request = arguments.Deserialize<WriteFileTextRequest>();
+        var request = arguments.Deserialize<FsWriteTextRequest>();
         return request is null
             ? Error.New("Invalid arguments for fs.write_text")
             : await writeTextHandler.Handle(request, ct).ConfigureAwait(false);
@@ -113,7 +113,7 @@ public sealed class ToolCallRouter(
 
     private async ValueTask<Fin<CallToolResult>> CallMovePathAsync(JsonElement arguments, CancellationToken ct)
     {
-        var request = arguments.Deserialize<MovePathRequest>();
+        var request = arguments.Deserialize<FsMovePathRequest>();
         return request is null
             ? Error.New("Invalid arguments for fs.move_path")
             : await movePathHandler.Handle(request, ct).ConfigureAwait(false);
@@ -121,7 +121,7 @@ public sealed class ToolCallRouter(
 
     private async ValueTask<Fin<CallToolResult>> CallCopyPathAsync(JsonElement arguments, CancellationToken ct)
     {
-        var request = arguments.Deserialize<CopyPathRequest>();
+        var request = arguments.Deserialize<FsCopyPathRequest>();
         return request is null
             ? Error.New("Invalid arguments for fs.copy_path")
             : await copyPathHandler.Handle(request, ct).ConfigureAwait(false);
@@ -143,12 +143,12 @@ public sealed class ToolCallRouter(
             : await shellExecHandler.Handle(request, ct).ConfigureAwait(false);
     }
 
-    private async ValueTask<Fin<CallToolResult>> CallSshExecAsync(JsonElement arguments, CancellationToken ct)
+    private async ValueTask<Fin<CallToolResult>> CallSshExecuteAsync(JsonElement arguments, CancellationToken ct)
     {
-        var request = arguments.Deserialize<SshExecRequest>();
-        return request is null || sshExecHandler is null
-            ? Error.New("Invalid arguments for ssh.exec")
-            : await sshExecHandler.Handle(request, ct).ConfigureAwait(false);
+        var request = arguments.Deserialize<SshExecuteRequest>();
+        return request is null || sshExecuteHandler is null
+            ? Error.New("Invalid arguments for ssh.execute")
+            : await sshExecuteHandler.Handle(request, ct).ConfigureAwait(false);
     }
 
     private async ValueTask<Fin<CallToolResult>> CallSshWriteTextAsync(JsonElement arguments, CancellationToken ct)

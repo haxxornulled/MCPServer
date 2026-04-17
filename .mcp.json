@@ -1,0 +1,22 @@
+{
+  "inputs": [],
+  "servers": {
+    "mcpserver-release": {
+      "type": "stdio",
+      "command": "mcpserver",
+      "args": []
+    },
+    "haxxornulled/mcpserver": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/McpServer.Host/McpServer.Host.csproj",
+        "-c",
+        "Release"
+      ],
+      "version": "1.0.0"
+    }
+  }
+}

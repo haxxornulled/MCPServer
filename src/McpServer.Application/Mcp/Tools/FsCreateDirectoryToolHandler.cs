@@ -1,44 +1,44 @@
 using System.Text.Json;
 using LanguageExt;
 using McpServer.Application.Abstractions.Files;
-using McpServer.Application.Abstractions.Mcp;
 using McpServer.Application.Files.Commands;
 using McpServer.Contracts.Tools;
 using Microsoft.Extensions.Logging;
 
-namespace McpServer.Application.Mcp.Tools;
-
-public sealed class FsCreateDirectoryToolHandler(
-    IFileSystemService fileSystemService,
-    ILogger<FsCreateDirectoryToolHandler> logger) : IToolHandler<CreateDirectoryRequest>
+namespace McpServer.Application.Mcp.Tools
 {
-    public string Name => "fs.create_directory";
-    public string Description => "Creates a directory within allowed roots.";
-
-    public JsonElement GetInputSchema() =>
-        JsonSerializer.SerializeToElement(new
-        {
-            type = "object",
-            properties = new
-            {
-                path = new { type = "string" }
-            },
-            required = new[] { "path" }
-        });
-
-    public async ValueTask<Fin<CallToolResult>> Handle(CreateDirectoryRequest request, CancellationToken ct)
+    public sealed class FsCreateDirectoryToolHandler(
+        IFileSystemService fileSystemService,
+        ILogger<FsCreateDirectoryToolHandler> logger) : IToolHandler<CreateDirectoryRequest>
     {
-        var result = await fileSystemService
-            .CreateDirectoryAsync(new CreateDirectoryCommand(request.Path), ct)
-            .ConfigureAwait(false);
+        public string Name => "fs.create_directory";
+        public string Description => "Creates a directory.";
 
-        return result.Map(_ =>
+        public JsonElement GetInputSchema() =>
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string" }
+                },
+                required = new[] { "path" }
+            });
+
+        public async ValueTask<Fin<CallToolResult>> Handle(CreateDirectoryRequest request, CancellationToken ct)
         {
-            logger.LogInformation("Tool {ToolName} completed", Name);
-            return new CallToolResult(
-            [
-                new ContentItem("text", $"Created directory: {request.Path}")
-            ]);
-        });
+            var result = await fileSystemService
+                .CreateDirectoryAsync(new CreateDirectoryCommand(request.Path), ct)
+                .ConfigureAwait(false);
+
+            return result.Map(_ =>
+            {
+                logger.LogInformation("Tool {ToolName} completed", Name);
+                return new CallToolResult(
+                [
+                    new ContentItem("text", $"Successfully created directory: {request.Path}")
+                ]);
+            });
+        }
     }
 }

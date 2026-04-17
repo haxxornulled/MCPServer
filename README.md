@@ -73,9 +73,39 @@ dotnet tool update --global McpServer.Host --version 0.1.6 --add-source https://
 
 After installation, run `mcpserver`.
 
+## GitHub Copilot
+
+GitHub Copilot in Visual Studio can use the released `mcpserver` tool as a local MCP server.
+
+Install the current release first:
+
+```powershell
+dotnet tool install --global McpServer.Host --version 0.1.6 --add-source https://nuget.pkg.github.com/haxxornulled/index.json
+```
+
+This repository includes a solution-scoped `.mcp.json` file that registers the released tool for Copilot:
+
+```json
+{
+	"inputs": [],
+	"servers": {
+		"mcpserver-release": {
+			"type": "stdio",
+			"command": "mcpserver",
+			"args": []
+		}
+	}
+}
+```
+
+In Visual Studio, open the solution, then open GitHub Copilot Chat in **Agent** mode and enable the `mcpserver-release` server.
+If you check the file into source control, keep it at the solution root so Visual Studio can discover it.
+
 ## LM Studio
 
 LM Studio supports local MCP programs via `mcp.json`. This server uses the MCP stdio transport, so you can register it as a local program.
+
+LM Studio 0.3.17+ can load MCP servers from `~/.lmstudio/mcp.json` on macOS/Linux or `%USERPROFILE%\.lmstudio\mcp.json` on Windows. It also has an "Add to LM Studio" deeplink flow if you want one-click setup.
 
 Windows example:
 
@@ -83,6 +113,9 @@ Windows example:
 {
 	"mcpServers": {
 		"mcpserver-filesystem": {
+			"command": "mcpserver"
+		},
+		"mcpserver-local-build": {
 			"command": "D:/McpServerRepo/src/McpServer.Host/bin/Release/net10.0/McpServer.Host.exe"
 		}
 	}
@@ -91,10 +124,11 @@ Windows example:
 
 Recommended workflow:
 
-1. Build the host in `Release` before connecting from LM Studio so the executable path points at the newest binary.
-2. In LM Studio, open the MCP settings and add the server entry to `mcp.json`.
+1. Install the `mcpserver` tool from GitHub Packages, or point LM Studio at the `Release` exe shown above.
+2. In LM Studio, open the Program tab, choose `Install > Edit mcp.json`, and add the server entry.
 3. Restart the MCP server from LM Studio after every rebuild so it picks up the latest executable.
 4. If you prefer `Debug` during development, change the path explicitly to `bin/Debug/net10.0/McpServer.Host.exe` rather than relying on `dotnet run`.
+5. On Windows, the helper script `scripts/install-lmstudio-mcp.ps1` can create or update `%USERPROFILE%\.lmstudio\mcp.json` for you.
 
 If you install from GitHub Packages instead of using a local build, point LM Studio at the installed `mcpserver` command rather than the repository output path.
 

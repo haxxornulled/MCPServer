@@ -16,7 +16,7 @@ public sealed class SshExecToolHandlerTests
     public async Task Handle_Should_Return_Structured_Result_With_Command_Output()
     {
         var ssh = Substitute.For<ISshService>();
-        var logger = Substitute.For<ILogger<SshExecToolHandler>>();
+        var logger = Substitute.For<ILogger<SshExecuteToolHandler>>();
 
         ssh.ExecuteAsync(Arg.Any<ExecuteSshCommand>(), Arg.Any<CancellationToken>())
             .Returns(new ValueTask<Fin<SshCommandResult>>(new SshCommandResult(
@@ -32,8 +32,8 @@ public sealed class SshExecToolHandlerTests
                 TimedOut: false,
                 OutputTruncated: false)));
 
-        var handler = new SshExecToolHandler(ssh, logger);
-        var result = await handler.Handle(new SshExecRequest("prod-web", "nginx -v"), CancellationToken.None);
+        var handler = new SshExecuteToolHandler(ssh, logger);
+        var result = await handler.Handle(new SshExecuteRequest("prod-web", "nginx -v"), CancellationToken.None);
 
         Assert.True(result.IsSucc);
 
@@ -41,8 +41,8 @@ public sealed class SshExecToolHandlerTests
             Succ: value => value,
             Fail: error => throw new InvalidOperationException(error.Message));
 
-        Assert.Contains(dto.Content, item => item.Text.Contains("Profile: prod-web", StringComparison.Ordinal));
-        Assert.False(dto.IsError.GetValueOrDefault());
+        Assert.Contains(dto.Content, item => item.Text.Contains("\"Profile\": \"prod-web\"", StringComparison.Ordinal));
+        Assert.False(dto.IsError);
         Assert.NotNull(dto.StructuredContent);
     }
 }

@@ -58,6 +58,7 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             .As<IProcessExecutionService>()
             .SingleInstance();
 
+
         builder.RegisterType<FsWriteTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsAppendTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCreateDirectoryToolHandler>().AsSelf().SingleInstance();
@@ -87,7 +88,7 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
                 .SingleInstance();
 
             builder.RegisterType<WebAccessService>().As<IWebAccessService>().SingleInstance();
-            builder.RegisterType<WebFetchToolHandler>().AsSelf().SingleInstance();
+            builder.RegisterType<WebFetchUrlToolHandler>().AsSelf().SingleInstance();
             builder.RegisterType<WebSearchToolHandler>().AsSelf().SingleInstance();
         }
 
@@ -100,7 +101,7 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
                 .As<ISshService>()
                 .SingleInstance();
 
-            builder.RegisterType<SshExecToolHandler>().AsSelf().SingleInstance();
+            builder.RegisterType<SshExecuteToolHandler>().AsSelf().SingleInstance();
             builder.RegisterType<SshWriteTextToolHandler>().AsSelf().SingleInstance();
         }
     }

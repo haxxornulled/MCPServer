@@ -19,16 +19,14 @@ public sealed class SshWriteTextToolHandlerTests
         var logger = Substitute.For<ILogger<SshWriteTextToolHandler>>();
 
         ssh.WriteTextAsync(Arg.Any<WriteSshTextCommand>(), Arg.Any<CancellationToken>())
-            .Returns(new ValueTask<Fin<SshWriteTextResult>>(new SshWriteTextResult(
+            .Returns(new ValueTask<Fin<SshFileWriteResult>>(new SshFileWriteResult(
                 Profile: "db-admin",
                 Host: "10.0.0.25",
                 Port: 22,
                 Username: "ops",
                 Path: "/etc/postgresql/16/main/postgresql.conf",
                 BytesWritten: 128,
-                Overwritten: true,
-                CreatedDirectories: false,
-                PermissionsApplied: "640")));
+                Success: true)));
 
         var handler = new SshWriteTextToolHandler(ssh, logger);
         var result = await handler.Handle(
@@ -42,7 +40,7 @@ public sealed class SshWriteTextToolHandlerTests
             Fail: error => throw new InvalidOperationException(error.Message));
 
         Assert.Contains(dto.Content, item => item.Text.Contains("postgresql.conf", StringComparison.Ordinal));
-        Assert.False(dto.IsError.GetValueOrDefault());
+        Assert.False(dto.IsError);
         Assert.NotNull(dto.StructuredContent);
     }
 }

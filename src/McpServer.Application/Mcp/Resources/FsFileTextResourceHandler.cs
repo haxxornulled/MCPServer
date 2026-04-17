@@ -39,7 +39,7 @@ public sealed class FsFileTextResourceHandler(
             Fail: error => throw new InvalidOperationException(error.Message));
 
         var result = await fileSystemService
-            .ReadTextAsync(new ReadFileTextCommand(localPath, Encoding.UTF8), ct)
+            .ReadTextAsync(new ReadFileTextCommand(localPath, Encoding.UTF8.WebName), ct)
             .ConfigureAwait(false);
 
         return result.Map(r =>

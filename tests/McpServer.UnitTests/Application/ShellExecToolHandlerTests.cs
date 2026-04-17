@@ -38,8 +38,8 @@ public sealed class ShellExecToolHandlerTests
             Succ: value => value,
             Fail: error => throw new InvalidOperationException(error.Message));
 
-        Assert.Contains(dto.Content, item => item.Text.Contains("ExitCode: 0", StringComparison.Ordinal));
-        Assert.False(dto.IsError.GetValueOrDefault());
+        Assert.Contains(dto.Content, item => item.Text.Contains("Exit Code: 0", StringComparison.Ordinal));
+        Assert.False(dto.IsError);
         Assert.NotNull(dto.StructuredContent);
     }
 }
