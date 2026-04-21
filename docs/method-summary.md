@@ -14,6 +14,7 @@ Primary constructors are not listed as methods.
 | `StdioMessageTransport` | `ReadRequestAsync(CancellationToken)` | Reads one newline-delimited JSON-RPC request from stdin and deserializes it into `JsonRpcRequest`. |
 | `StdioMessageTransport` | `WriteResponseAsync(JsonRpcResponse, CancellationToken)` | Serializes and writes one JSON-RPC response line to stdout. |
 | `StdioMessageTransport` | `WriteNotificationAsync(JsonRpcNotification, CancellationToken)` | Serializes and writes one JSON-RPC notification line to stdout. |
+| `StdioMessageTransport` | `SendRequestAsync(string, object?, CancellationToken)` | Sends a server-initiated JSON-RPC request over stdio and waits for the matching response. |
 | `StdioMessageTransport` | `DisposeAsync()` | Disposes the underlying reader and writer resources. |
 
 ### `Transport/Stdio/StdioServerHostedService.cs`
@@ -77,10 +78,13 @@ Primary constructors are not listed as methods.
 | --- | --- | --- |
 | `McpSession` | `ProtocolVersion` | Protocol version captured from initialize. |
 | `McpSession` | `ClientCapabilities` | Client capabilities captured from initialize. |
+| `McpSession` | `ClientRoots` | Client-provided roots captured from `roots/list`. |
 | `McpSession` | `IsInitialized` | Indicates whether initialize completed. |
 | `McpSession` | `IsReady` | Indicates whether `notifications/initialized` has been processed. |
 | `McpSession` | `IsShutdownRequested` | Indicates whether shutdown has been requested. |
+| `McpSession` | `SupportsRoots` | Indicates whether the client advertised roots support during initialize. |
 | `McpSession` | `CompleteInitialize(string, ClientCapabilitiesDto?)` | Stores initialize data and transitions the session into initialized state. |
+| `McpSession` | `UpdateClientRoots(IReadOnlyList<RootDto>)` | Stores the client roots returned from the roots handshake. |
 | `McpSession` | `MarkReady()` | Marks the session ready after the initialized notification. |
 | `McpSession` | `RequestShutdown()` | Marks shutdown requested. |
 
@@ -149,7 +153,9 @@ Primary constructors are not listed as methods.
 | --- | --- | --- |
 | `IPathPolicy` | `NormalizeAndValidateReadPath(string)` | Validates and normalizes a read path within allowed roots. |
 | `IPathPolicy` | `NormalizeAndValidateWritePath(string)` | Validates and normalizes a write path within allowed roots. |
+| `PathPolicy` | `SetAllowedRoots(IEnumerable<string>)` | Replaces the active allowed roots for the current session context. |
 | `IResourcePathTranslator` | `TryTranslateToLocalPath(string)` | Converts a resource URI to a local path. |
+| `ResourcePathTranslator` | `SetWorkspaceRoot(string)` | Replaces the active workspace root used for resource URIs. |
 | `IFileMutationLockProvider` | `AcquireAsync(string, CancellationToken)` | Acquires an async lock for one normalized path. |
 | `IFileMutationLockProvider` | `AcquireManyAsync(IEnumerable<string>, CancellationToken)` | Acquires async locks for multiple normalized paths. |
 | `IFileSystemService` | `ReadTextAsync(ReadFileTextCommand, CancellationToken)` | Reads file text. |
@@ -219,6 +225,9 @@ Primary constructors are not listed as methods.
 | `FsAppendTextToolHandler` | `Name` / `Description` | Advertises the `fs.append_text` tool. |
 | `FsAppendTextToolHandler` | `GetInputSchema()` | Returns the append-text input schema. |
 | `FsAppendTextToolHandler` | `Handle(AppendFileTextRequest, CancellationToken)` | Appends text to a file within allowed roots. |
+| `FsReadFileToolHandler` | `Name` / `Description` | Advertises the `fs.read_file` tool. |
+| `FsReadFileToolHandler` | `GetInputSchema()` | Returns the read-file input schema. |
+| `FsReadFileToolHandler` | `Handle(FsReadFileRequest, CancellationToken)` | Reads text from a file within allowed roots. |
 | `FsCreateDirectoryToolHandler` | `Name` / `Description` | Advertises the `fs.create_directory` tool. |
 | `FsCreateDirectoryToolHandler` | `GetInputSchema()` | Returns the create-directory input schema. |
 | `FsCreateDirectoryToolHandler` | `Handle(CreateDirectoryRequest, CancellationToken)` | Creates a directory within allowed roots. |
@@ -309,6 +318,7 @@ Data-only contract groups:
 | File group | Summary |
 | --- | --- |
 | `Lifecycle/*.cs` | MCP initialize/shutdown request and response DTOs plus advertised capability records. |
+| `Roots/*.cs` | MCP filesystem root DTOs used for the client roots handshake. |
 | `Tools/*.cs` | Tool request payloads and tool list/call DTOs. |
 | `Resources/*.cs` | Resource list/read DTOs. |
 | `Prompts/*.cs` | Prompt list/get DTOs and prompt argument payloads. |

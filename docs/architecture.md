@@ -69,6 +69,7 @@ flowchart TD
 - all resource handlers
 - all prompt handlers
 - optional web policy, web access service, and web tool handlers when enabled in configuration
+- the active workspace path policy and resource translator as mutable singletons so MCP roots can become session-aware
 
 ### 3. Transport loop
 
@@ -136,6 +137,7 @@ Filesystem tools are always available:
 
 - `fs.write_text`
 - `fs.append_text`
+- `fs.read_file`
 - `fs.create_directory`
 - `fs.move_path`
 - `fs.copy_path`
@@ -144,6 +146,8 @@ Filesystem tools are always available:
 The host also exposes:
 
 - `shell.exec` for non-interactive command execution inside the validated workspace root
+
+When the client supports MCP roots, the server requests `roots/list` after initialization and promotes the returned roots to the active workspace context for that session. The first returned root becomes the primary workspace for relative file and shell paths, while the configured server workspace remains the fallback when no roots are advertised.
 
 When SSH is enabled, the host also exposes:
 
@@ -190,11 +194,11 @@ The filesystem implementation in `FileSystemService` is intentionally policy-dri
 
 ### Path validation
 
-`PathPolicy` normalizes all paths and rejects anything outside configured allowed roots. For MCP-facing paths it treats both `/workspace/...` and `/mcpserver-filesystem/...` as the same virtual workspace root so LM Studio can pass its server alias without breaking file or command tools.
+`PathPolicy` normalizes all paths and rejects anything outside the active allowed roots. For MCP-facing paths it treats `/workspace/...`, `/project/...`, and `/mcpserver-filesystem/...` as the same virtual workspace root so MCP clients can surface either a project or workspace alias without breaking file or command tools.
 
 ### URI translation
 
-`ResourcePathTranslator` accepts `file`, `dir`, and `filemeta` schemes and converts them to local paths.
+`ResourcePathTranslator` accepts `file`, `dir`, and `filemeta` schemes and converts them to local paths. It also supports `/project/...` as a workspace alias alongside `/workspace/...`.
 
 ### Process execution
 

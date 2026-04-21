@@ -1,6 +1,7 @@
 using LanguageExt;
 using LanguageExt.Common;
 using McpServer.Contracts.Lifecycle;
+using McpServer.Contracts.Roots;
 using static LanguageExt.Prelude;
 
 namespace McpServer.Protocol.Session;
@@ -13,10 +14,12 @@ public sealed class McpSession
 
     public string? ProtocolVersion { get; private set; }
     public ClientCapabilitiesDto? ClientCapabilities { get; private set; }
+    public IReadOnlyList<RootDto> ClientRoots { get; private set; } = [];
 
     public bool IsInitialized => Volatile.Read(ref _initializeCompleted) == 1;
     public bool IsReady => Volatile.Read(ref _ready) == 1;
     public bool IsShutdownRequested => Volatile.Read(ref _shutdownRequested) == 1;
+    public bool SupportsRoots => ClientCapabilities?.Roots is not null;
 
     public Fin<Unit> CompleteInitialize(string protocolVersion, ClientCapabilitiesDto? clientCapabilities)
     {
@@ -27,6 +30,17 @@ public sealed class McpSession
 
         ProtocolVersion = protocolVersion;
         ClientCapabilities = clientCapabilities;
+        return unit;
+    }
+
+    public Fin<Unit> UpdateClientRoots(IReadOnlyList<RootDto> clientRoots)
+    {
+        if (!IsInitialized)
+        {
+            return Error.New("Initialize must complete first");
+        }
+
+        ClientRoots = clientRoots;
         return unit;
     }
 

@@ -27,10 +27,9 @@ public sealed class StdioMessageTransport(
         outputStream,
         new UTF8Encoding(false),
         bufferSize: 16 * 1024,
-        leaveOpen: true)
-    {
-        AutoFlush = true
-    };
+        leaveOpen: true);
+
+    private int _nextRequestId = 1000;
 
     public async ValueTask<JsonRpcRequest?> ReadRequestAsync(CancellationToken ct)
     {
@@ -75,6 +74,52 @@ public sealed class StdioMessageTransport(
 
         await _writer.WriteLineAsync(json).ConfigureAwait(false);
         await _writer.FlushAsync().ConfigureAwait(false);
+    }
+
+    public async ValueTask<JsonRpcResponse?> SendRequestAsync(string method, object? parameters, CancellationToken ct)
+    {
+        var requestId = Interlocked.Increment(ref _nextRequestId);
+        var request = new JsonRpcRequest(
+            "2.0",
+            JsonSerializer.SerializeToElement(requestId, JsonOptions),
+            method,
+            parameters is null ? null : JsonSerializer.SerializeToElement(parameters, JsonOptions));
+
+        var json = JsonSerializer.Serialize(request, JsonOptions);
+        if (json.Contains('\n') || json.Contains('\r'))
+        {
+            throw new InvalidOperationException("Serialized stdio MCP request must not contain embedded newlines.");
+        }
+
+        await _writer.WriteLineAsync(json).ConfigureAwait(false);
+        await _writer.FlushAsync().ConfigureAwait(false);
+
+        while (true)
+        {
+            var line = await _reader.ReadLineAsync(ct).ConfigureAwait(false);
+            if (line is null || string.IsNullOrWhiteSpace(line))
+            {
+                return null;
+            }
+
+            try
+            {
+                var response = JsonSerializer.Deserialize<JsonRpcResponse>(line, JsonOptions);
+                if (response?.Id is not { } responseId || responseId.ValueKind != JsonValueKind.Number)
+                {
+                    continue;
+                }
+
+                if (responseId.GetInt32() == requestId)
+                {
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to deserialize JSON-RPC response line");
+            }
+        }
     }
 
     public ValueTask DisposeAsync()

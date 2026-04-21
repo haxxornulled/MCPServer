@@ -4,6 +4,7 @@ using Autofac;
 using McpServer.Contracts.Lifecycle;
 using McpServer.Contracts.Prompts;
 using McpServer.Contracts.Resources;
+using McpServer.Contracts.Roots;
 using McpServer.Contracts.Tools;
 using McpServer.Protocol;
 using McpServer.Protocol.JsonRpc;
@@ -34,6 +35,8 @@ public sealed class StdioServerHostedService(
         var toolRouter = scope.Resolve<ToolCallRouter>();
         var resourceRouter = scope.Resolve<ResourceReadRouter>();
         var promptRouter = scope.Resolve<PromptRouter>();
+        var pathPolicy = scope.Resolve<McpServer.Infrastructure.Files.PathPolicy>();
+        var resourcePathTranslator = scope.Resolve<McpServer.Infrastructure.Files.ResourcePathTranslator>();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -60,6 +63,10 @@ public sealed class StdioServerHostedService(
                 toolRouter,
                 resourceRouter,
                 promptRouter,
+                pathPolicy,
+                resourcePathTranslator,
+                transport,
+                logger,
                 stoppingToken).ConfigureAwait(false);
 
             if (dispatch.Response is not null)
@@ -92,6 +99,10 @@ public sealed class StdioServerHostedService(
         ToolCallRouter toolRouter,
         ResourceReadRouter resourceRouter,
         PromptRouter promptRouter,
+        McpServer.Infrastructure.Files.PathPolicy pathPolicy,
+        McpServer.Infrastructure.Files.ResourcePathTranslator resourcePathTranslator,
+        StdioMessageTransport transport,
+        ILogger<StdioServerHostedService> logger,
         CancellationToken ct)
     {
         try
@@ -100,7 +111,8 @@ public sealed class StdioServerHostedService(
             {
                 "initialize" => DispatchResult.WithResponse(HandleInitialize(request, session, initializeHandler)),
                 "ping" => DispatchResult.WithResponse(HandlePing(request)),
-                "notifications/initialized" => DispatchResult.WithResponse(HandleInitialized(request, session)),
+                "notifications/initialized" => DispatchResult.WithResponse(
+                    await HandleInitializedAsync(request, session, transport, pathPolicy, resourcePathTranslator, logger, ct).ConfigureAwait(false)),
                 "shutdown" => DispatchResult.WithResponse(HandleShutdown(request, session, shutdownHandler)),
                 "exit" => DispatchResult.Exit(HandleExit(session, exitHandler)),
                 "tools/list" => DispatchResult.WithResponse(
@@ -146,13 +158,75 @@ public sealed class StdioServerHostedService(
             Fail: e => JsonRpcErrorFactory.ServerError(request.Id, e.Message));
     }
 
-    private static JsonRpcResponse? HandleInitialized(JsonRpcRequest request, McpSession session)
+    private static async ValueTask<JsonRpcResponse?> HandleInitializedAsync(
+        JsonRpcRequest request,
+        McpSession session,
+        StdioMessageTransport transport,
+        McpServer.Infrastructure.Files.PathPolicy pathPolicy,
+        McpServer.Infrastructure.Files.ResourcePathTranslator resourcePathTranslator,
+        ILogger<StdioServerHostedService> logger,
+        CancellationToken ct)
     {
         var result = session.MarkReady();
 
-        return result.Match<JsonRpcResponse?>(
+        var response = result.Match<JsonRpcResponse?>(
             Succ: _ => null,
             Fail: e => JsonRpcErrorFactory.ServerError(request.Id, e.Message));
+
+        if (response is not null || !session.SupportsRoots)
+        {
+            return response;
+        }
+
+        try
+        {
+            var rootsResponse = await transport.SendRequestAsync("roots/list", new ListRootsRequestParams(), ct).ConfigureAwait(false);
+            if (rootsResponse is null)
+            {
+                return null;
+            }
+
+            if (rootsResponse.Error is not null)
+            {
+                logger.LogInformation("Client roots/list request failed: {Message}", rootsResponse.Error.Message);
+                return null;
+            }
+
+            if (rootsResponse.Result is not JsonElement resultElement ||
+                !resultElement.TryGetProperty("roots", out var rootsElement) ||
+                rootsElement.ValueKind != JsonValueKind.Array)
+            {
+                logger.LogInformation("Client roots/list response did not contain roots");
+                return null;
+            }
+
+            var roots = rootsElement.Deserialize<IReadOnlyList<RootDto>>() ?? [];
+            if (roots.Count == 0)
+            {
+                return null;
+            }
+
+            var normalizedRoots = roots
+                .Select(root => new Uri(root.Uri).LocalPath)
+                .Select(static path => Path.GetFullPath(path))
+                .ToArray();
+
+            pathPolicy.SetAllowedRoots(normalizedRoots);
+            resourcePathTranslator.SetWorkspaceRoot(normalizedRoots[0]);
+            var updateRootsResult = session.UpdateClientRoots(roots);
+            if (updateRootsResult.IsFail)
+            {
+                logger.LogWarning("Failed storing client roots in session");
+            }
+
+            logger.LogInformation("Configured session roots: {Roots}", string.Join(", ", normalizedRoots));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to negotiate client roots");
+        }
+
+        return null;
     }
 
     private static JsonRpcResponse HandlePing(JsonRpcRequest request) =>
