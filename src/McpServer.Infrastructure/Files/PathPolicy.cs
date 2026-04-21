@@ -4,19 +4,30 @@ using McpServer.Application.Abstractions.Files;
 
 namespace McpServer.Infrastructure.Files;
 
-public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
+public sealed class PathPolicy : IPathPolicy
 {
-    private static readonly string[] WorkspaceAliases = ["workspace", "mcpserver-filesystem"];
+    private static readonly string[] WorkspaceAliases = ["workspace", "project", "mcpserver-filesystem"];
+    private readonly object _sync = new();
+    private string[] _roots;
+    private string[] _rootPrefixes;
 
-    private readonly string[] _roots = allowedRoots
-        .Select(Path.GetFullPath)
-        .Select(static p => TrimTrailingSeparators(p))
-        .ToArray();
-
-    private string PrimaryRoot => _roots[0];
+    public PathPolicy(IEnumerable<string> allowedRoots)
+    {
+        (_roots, _rootPrefixes) = BuildRootCache(allowedRoots);
+    }
 
     public Fin<string> NormalizeAndValidateReadPath(string rawPath) => Normalize(rawPath);
     public Fin<string> NormalizeAndValidateWritePath(string rawPath) => Normalize(rawPath);
+
+    public void SetAllowedRoots(IEnumerable<string> allowedRoots)
+    {
+        var cache = BuildRootCache(allowedRoots);
+        lock (_sync)
+        {
+            _roots = cache.Roots;
+            _rootPrefixes = cache.RootPrefixes;
+        }
+    }
 
     private Fin<string> Normalize(string rawPath)
     {
@@ -32,11 +43,11 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
                 return Error.New("At least one allowed root is required");
             }
 
+            var roots = _roots;
+            var rootPrefixes = _rootPrefixes;
             var full = ResolvePath(rawPath);
 
-            var allowed = _roots.Any(root =>
-                full.Equals(root, PathComparison.Comparison) ||
-                full.StartsWith(root + Path.DirectorySeparatorChar, PathComparison.Comparison));
+            var allowed = IsUnderAllowedRoot(full, roots, rootPrefixes);
 
             if (allowed)
             {
@@ -44,7 +55,7 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
                 return success;
             }
 
-            return Error.New($"Path '{rawPath}' is outside allowed roots");
+            return Error.New($"Path '{rawPath}' is outside allowed roots. Allowed roots: {string.Join(", ", _roots)}");
         }
         catch (Exception ex)
         {
@@ -54,11 +65,13 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
 
     private string ResolvePath(string rawPath)
     {
+        var roots = _roots;
+        var primaryRoot = roots[0];
         var trimmed = rawPath.Trim();
 
         if (TryResolveWorkspaceRelativePath(trimmed, out var relativePath))
         {
-            return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(PrimaryRoot, relativePath)));
+            return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(primaryRoot, relativePath)));
         }
 
         if (Path.IsPathRooted(trimmed))
@@ -66,31 +79,37 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
             return TrimTrailingSeparators(Path.GetFullPath(trimmed));
         }
 
-        return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(PrimaryRoot, trimmed)));
+        return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(primaryRoot, trimmed)));
     }
 
     private static bool TryResolveWorkspaceRelativePath(string rawPath, out string relativePath)
     {
-        var normalized = rawPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var normalized = NormalizeDirectorySeparators(rawPath);
+        var span = normalized.AsSpan();
 
-        while (normalized.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        while (span.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
-            normalized = normalized[2..];
+            span = span[2..];
         }
 
-        normalized = normalized.TrimStart(Path.DirectorySeparatorChar);
+        while (span.Length > 0 && span[0] == Path.DirectorySeparatorChar)
+        {
+            span = span[1..];
+        }
 
         foreach (var alias in WorkspaceAliases)
         {
-            if (normalized.Equals(alias, StringComparison.OrdinalIgnoreCase))
+            if (span.Equals(alias.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
                 relativePath = string.Empty;
                 return true;
             }
 
-            if (normalized.StartsWith(alias + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            if (span.StartsWith(alias.AsSpan(), StringComparison.OrdinalIgnoreCase) &&
+                span.Length > alias.Length &&
+                span[alias.Length] == Path.DirectorySeparatorChar)
             {
-                relativePath = normalized[(alias.Length + 1)..];
+                relativePath = span[(alias.Length + 1)..].ToString();
                 return true;
             }
         }
@@ -101,4 +120,42 @@ public sealed class PathPolicy(IEnumerable<string> allowedRoots) : IPathPolicy
 
     private static string TrimTrailingSeparators(string path) =>
         path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    private static bool IsUnderAllowedRoot(string fullPath, IReadOnlyList<string> roots, IReadOnlyList<string> rootPrefixes)
+    {
+        for (var i = 0; i < roots.Count; i++)
+        {
+            if (fullPath.Equals(roots[i], PathComparison.Comparison) ||
+                fullPath.StartsWith(rootPrefixes[i], PathComparison.Comparison))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static (string[] Roots, string[] RootPrefixes) BuildRootCache(IEnumerable<string> allowedRoots)
+    {
+        var roots = allowedRoots
+            .Select(Path.GetFullPath)
+            .Select(static p => TrimTrailingSeparators(p))
+            .ToArray();
+
+        var rootPrefixes = roots
+            .Select(root => root + Path.DirectorySeparatorChar)
+            .ToArray();
+
+        return (roots, rootPrefixes);
+    }
+
+    private static string NormalizeDirectorySeparators(string rawPath)
+    {
+        if (rawPath.IndexOf(Path.AltDirectorySeparatorChar) < 0)
+        {
+            return rawPath;
+        }
+
+        return rawPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+    }
 }

@@ -18,11 +18,18 @@ using McpServer.Protocol.Session;
 
 namespace McpServer.Host.DependencyInjection;
 
-public sealed class AutofacRootModule(IConfiguration configuration) : Module
+public sealed class AutofacRootModule : Module
 {
+    private readonly IConfiguration _configuration;
+
+    public AutofacRootModule(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
     protected override void Load(ContainerBuilder builder)
     {
-        var options = configuration.GetSection(McpServerOptions.SectionName).Get<McpServerOptions>() ?? new McpServerOptions();
+        var options = _configuration.GetSection(McpServerOptions.SectionName).Get<McpServerOptions>() ?? new McpServerOptions();
         var workspace = ResolveWorkspacePath(options.Workspace.RootPath);
 
         Directory.CreateDirectory(workspace);
@@ -43,10 +50,12 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
             .SingleInstance();
 
         builder.Register(_ => new ResourcePathTranslator(workspace))
+            .AsSelf()
             .As<IResourcePathTranslator>()
             .SingleInstance();
 
         builder.Register(_ => new PathPolicy([workspace]))
+            .AsSelf()
             .As<IPathPolicy>()
             .SingleInstance();
 
@@ -61,6 +70,7 @@ public sealed class AutofacRootModule(IConfiguration configuration) : Module
 
         builder.RegisterType<FsWriteTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsAppendTextToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsReadFileToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCreateDirectoryToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsMovePathToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCopyPathToolHandler>().AsSelf().SingleInstance();

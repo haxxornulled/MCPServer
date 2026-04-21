@@ -129,6 +129,9 @@ Recommended workflow:
 3. Restart the MCP server from LM Studio after every rebuild so it picks up the latest executable.
 4. If you prefer `Debug` during development, change the path explicitly to `bin/Debug/net10.0/McpServer.Host.exe` rather than relying on `dotnet run`.
 5. On Windows, the helper script `scripts/install-lmstudio-mcp.ps1` can create or update `%USERPROFILE%\.lmstudio\mcp.json` for you.
+6. If you do not want LM Studio's `js-code-sandbox`, run `.\scripts\Disable-LmStudioSandbox.ps1` once to move it aside and clean its chat skip patterns.
+7. If you want a single command that both removes the sandbox and enables the release server wildcard skip pattern, run `.\scripts\Enable-LmStudioAgentMode.ps1`.
+8. If you want to watch the host log in real time, run `.\scripts\Watch-ServerLogs.ps1`.
 
 If you install from GitHub Packages instead of using a local build, point LM Studio at the installed `mcpserver` command rather than the repository output path.
 
@@ -137,13 +140,15 @@ Compatibility notes:
 - The server negotiates MCP protocol versions and falls back to `2025-03-26` for unknown client versions to stay compatible with current MCP hosts such as LM Studio.
 - The server supports `ping`, which some MCP hosts use as a connection health check.
 - The server exposes `shell.exec` for non-interactive command execution inside the configured workspace.
+- When the client supports MCP roots, the server asks for `roots/list` after initialization and treats the first returned root as the active project/workspace context for file and shell tools.
 - The server can optionally expose `ssh.exec` and `ssh.write_text` when SSH profiles are enabled in configuration.
 - `shell.exec` accepts both `workspace` and LM Studio's `/mcpserver-filesystem` alias as workspace roots for `workingDirectory`.
-- Logs are written to stderr and `logs/`, not stdout, so stdio MCP traffic stays clean.
+- `shell.exec` also accepts `project` as a workspace alias when roots are available.
+- Logs are written to `logs/` so stdio MCP traffic stays clean.
 
 ## Inference Tool Smoke Testing
 
-The repository includes a PowerShell harness that tests the registered MCP tools through an OpenAI-compatible inference endpoint such as LM Studio running at `http://192.168.96.1:1234`.
+The repository includes a PowerShell harness that tests the registered MCP tools through an OpenAI-compatible inference endpoint such as LM Studio running at `http://192.168.50.44:1234`.
 
 Default command:
 
@@ -163,6 +168,7 @@ What it does:
 Notes:
 
 - The default scenarios cover the core registered tools in the default host configuration: filesystem tools plus `shell.exec`.
+- The default scenarios cover both the explicit `command` + `args` form and the bare shell-line fallback for `shell.exec`.
 - The default scenarios are ordered and dependency-aware, so downstream tools are skipped with an explicit reason if an earlier prerequisite scenario fails.
 - Optional tools such as `ssh.exec`, `ssh.write_text`, `web.fetch_url`, and `web.search` can be tested by enabling them in host configuration and extending `scripts/inference-tool-scenarios.json`.
 - If the Release host executable is missing, the script falls back to `dotnet run --project ... --no-build`.
@@ -175,6 +181,18 @@ pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -IncludeTool shell.exec
 pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -AllowMissingScenarios
 pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -Model openai/gpt-oss-20b
 pwsh -File .\scripts\Invoke-InferenceToolSmokeTest.ps1 -Model openai/gpt-oss-20b -InferenceTimeoutSeconds 180
+```
+
+If you want a heavier LM Studio API workout that drives the GPU harder, use the native v1 API script:
+
+```powershell
+pwsh -File .\scripts\Invoke-LmStudioGpuWorkout.ps1 -WorkerCount 1 -TurnsPerWorker 1 -ContextLength 49152 -MaxOutputTokens 4096 -ParallelSessions 2 -PromptRepeatCount 300
+```
+
+To verify structured output on the OpenAI-compatible endpoint, use:
+
+```powershell
+pwsh -File .\scripts\Invoke-LmStudioStructuredOutputProbe.ps1 -PrettyPrint
 ```
 
 ## SSH Automation
@@ -238,6 +256,12 @@ Install PostgreSQL and create a database:
 
 ```json
 {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"ssh.exec","arguments":{"profile":"db-admin","command":"sudo apt-get update && sudo apt-get install -y postgresql && sudo systemctl enable --now postgresql && sudo -u postgres createdb appdb","timeoutSeconds":900}}}
+```
+
+Run a git clone with explicit executable plus args:
+
+```json
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"shell.exec","arguments":{"command":"git","args":["clone","https://github.com/haxxornulled/PF-World-Of-Warcraft-Framework.git"],"timeoutSeconds":300}}}
 ```
 
 Then send newline-delimited JSON-RPC messages over stdio.

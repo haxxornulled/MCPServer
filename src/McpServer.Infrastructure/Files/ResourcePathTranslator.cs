@@ -6,11 +6,20 @@ namespace McpServer.Infrastructure.Files;
 
 public sealed class ResourcePathTranslator : IResourcePathTranslator
 {
-    private readonly string _workspaceRoot = Path.GetFullPath(".");
+    private readonly object _sync = new();
+    private string _workspaceRoot = Path.GetFullPath(".");
 
     public ResourcePathTranslator(string workspaceRoot)
     {
         _workspaceRoot = TrimTrailingSeparators(Path.GetFullPath(workspaceRoot));
+    }
+
+    public void SetWorkspaceRoot(string workspaceRoot)
+    {
+        lock (_sync)
+        {
+            _workspaceRoot = TrimTrailingSeparators(Path.GetFullPath(workspaceRoot));
+        }
     }
 
     public Fin<string> TryTranslateToLocalPath(string uri)
@@ -40,17 +49,24 @@ public sealed class ResourcePathTranslator : IResourcePathTranslator
         var trimmed = path.TrimStart(Path.DirectorySeparatorChar);
 
         const string workspaceSegment = "workspace";
+        const string projectSegment = "project";
+        var workspaceRoot = _workspaceRoot;
 
-        if (trimmed.Equals(workspaceSegment, StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Equals(workspaceSegment, StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals(projectSegment, StringComparison.OrdinalIgnoreCase))
         {
-            Fin<string> success = _workspaceRoot;
+            Fin<string> success = workspaceRoot;
             return success;
         }
 
-        if (trimmed.StartsWith(workspaceSegment + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        if (trimmed.StartsWith(workspaceSegment + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith(projectSegment + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            var relativePath = trimmed[(workspaceSegment.Length + 1)..];
-            Fin<string> success = Path.GetFullPath(Path.Combine(_workspaceRoot, relativePath));
+            var segment = trimmed.StartsWith(workspaceSegment + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                ? workspaceSegment
+                : projectSegment;
+            var relativePath = trimmed[(segment.Length + 1)..];
+            Fin<string> success = Path.GetFullPath(Path.Combine(workspaceRoot, relativePath));
             return success;
         }
 

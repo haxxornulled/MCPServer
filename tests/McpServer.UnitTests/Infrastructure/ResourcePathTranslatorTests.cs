@@ -38,4 +38,21 @@ public sealed class ResourcePathTranslatorTests
             Fail: error => throw new InvalidOperationException(error.Message));
         Assert.Equal(workspace, translated);
     }
+
+    [Fact]
+    public void TryTranslateToLocalPath_Should_Map_Project_File_Uri_To_Local_Path()
+    {
+        var workspace = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "mcpserver-resource-tests", Guid.NewGuid().ToString("N")));
+        Directory.CreateDirectory(workspace);
+
+        var sut = new ResourcePathTranslator(workspace);
+
+        var result = sut.TryTranslateToLocalPath("file:///project/folder/test.txt");
+
+        Assert.True(result.IsSucc);
+        var translated = result.Match(
+            Succ: value => value,
+            Fail: error => throw new InvalidOperationException(error.Message));
+        Assert.Equal(Path.Combine(workspace, "folder", "test.txt"), translated);
+    }
 }
