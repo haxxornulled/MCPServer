@@ -15,6 +15,7 @@ using McpServer.Infrastructure.Web;
 using McpServer.Protocol.Lifecycle;
 using McpServer.Protocol.Routing;
 using McpServer.Protocol.Session;
+using Serilog;
 
 namespace McpServer.Host.DependencyInjection;
 
@@ -33,6 +34,10 @@ public sealed class AutofacRootModule : Module
         var workspace = ResolveWorkspacePath(options.Workspace.RootPath);
 
         Directory.CreateDirectory(workspace);
+        Log.Information(
+            "Resolved MCP workspace root {WorkspaceRoot} from configured value {ConfiguredRootPath}",
+            workspace,
+            options.Workspace.RootPath);
 
         builder.RegisterInstance(options).AsSelf().SingleInstance();
 
@@ -47,6 +52,19 @@ public sealed class AutofacRootModule : Module
 
         builder.RegisterType<FileMutationLockProvider>()
             .As<IFileMutationLockProvider>()
+            .SingleInstance();
+
+        builder.RegisterType<WorkspaceChangeFeed>()
+            .As<IWorkspaceChangeFeed>()
+            .SingleInstance();
+
+        builder.Register(ctx =>
+            {
+                var watcher = new WorkspaceFileWatcher(ctx.Resolve<IWorkspaceChangeFeed>());
+                watcher.SetProjectRoot(workspace);
+                return watcher;
+            })
+            .As<IWorkspaceFileWatcher>()
             .SingleInstance();
 
         builder.Register(_ => new ResourcePathTranslator(workspace))
@@ -71,15 +89,21 @@ public sealed class AutofacRootModule : Module
         builder.RegisterType<FsWriteTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsAppendTextToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsReadFileToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<FsListDirectoryToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCreateDirectoryToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsMovePathToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsCopyPathToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<FsDeletePathToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<WorkspaceSetRootToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<WorkspaceSelectFolderToolHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<WorkspaceInspectToolHandler>().AsSelf().SingleInstance();
         builder.RegisterType<ShellExecToolHandler>().AsSelf().SingleInstance();
 
         builder.RegisterType<FsFileTextResourceHandler>().As<IResourceHandler>().SingleInstance();
         builder.RegisterType<FsDirectoryResourceHandler>().As<IResourceHandler>().SingleInstance();
         builder.RegisterType<FsFileMetadataResourceHandler>().As<IResourceHandler>().SingleInstance();
+        builder.RegisterType<WorkspaceTreeResourceHandler>().As<IResourceHandler>().SingleInstance();
+        builder.RegisterType<WorkspaceChangesResourceHandler>().As<IResourceHandler>().SingleInstance();
 
         builder.RegisterType<SummarizeFilePromptHandler>().As<IPromptHandler>().SingleInstance();
         builder.RegisterType<ReviewDirectoryPromptHandler>().As<IPromptHandler>().SingleInstance();

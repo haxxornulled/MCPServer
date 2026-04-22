@@ -13,7 +13,7 @@ namespace McpServer.Application.Mcp.Tools
         ILogger<ShellExecToolHandler> logger) : IToolHandler<ShellExecRequest>
     {
         public string Name => "shell.exec";
-        public string Description => "Executes a shell command.";
+        public string Description => "Executes a command in the active project. Prefer an executable plus args, but bare shell command lines are also supported.";
 
         public JsonElement GetInputSchema() =>
             JsonSerializer.SerializeToElement(new
@@ -21,9 +21,22 @@ namespace McpServer.Application.Mcp.Tools
                 type = "object",
                 properties = new
                 {
-                    command = new { type = "string" },
-                    args = new { type = "array", items = new { type = "string" } },
-                    workingDirectory = new { type = "string" },
+                    command = new
+                    {
+                        type = "string",
+                        description = "Executable path or a shell command line when args are omitted."
+                    },
+                    args = new
+                    {
+                        type = "array",
+                        items = new { type = "string" },
+                        description = "Pass arguments separately instead of embedding them in command."
+                    },
+                    workingDirectory = new
+                    {
+                        type = "string",
+                        description = "Optional project-relative working directory."
+                    },
                     timeoutSeconds = new { type = "integer", @default = 30, minimum = 1, maximum = 300 },
                     maxOutputChars = new { type = "integer", @default = 12000, minimum = 256, maximum = 200000 }
                 },
@@ -32,10 +45,11 @@ namespace McpServer.Application.Mcp.Tools
 
         public async ValueTask<Fin<CallToolResult>> Handle(ShellExecRequest request, CancellationToken ct)
         {
+            var command = BuildExecutionCommand(request);
             var result = await processExecutionService
                 .RunAsync(new RunProcessCommand(
-                    request.Command,
-                    request.Args,
+                    command.Command,
+                    command.Arguments,
                     request.WorkingDirectory,
                     request.TimeoutSeconds,
                     request.MaxOutputChars), ct)
@@ -57,5 +71,169 @@ namespace McpServer.Application.Mcp.Tools
                 StructuredContent: processResult);
             });
         }
+
+        private static RunProcessCommand BuildExecutionCommand(ShellExecRequest request)
+        {
+            if (OperatingSystem.IsWindows() && ShouldUseWindowsCompatibilityShell(request.Command))
+            {
+                return new RunProcessCommand(
+                    "pwsh",
+                    [
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-Command",
+                        BuildWindowsCompatibilityCommand(request.Command, request.Args)
+                    ],
+                    request.WorkingDirectory,
+                    request.TimeoutSeconds,
+                    request.MaxOutputChars);
+            }
+
+            if (request.Args is { Length: > 0 } || !ShouldUseShellFallback(request.Command))
+            {
+                return new RunProcessCommand(request.Command, request.Args, request.WorkingDirectory, request.TimeoutSeconds, request.MaxOutputChars);
+            }
+
+            return OperatingSystem.IsWindows()
+                ? new RunProcessCommand(
+                    "pwsh",
+                    [
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-Command",
+                        request.Command
+                    ],
+                    request.WorkingDirectory,
+                    request.TimeoutSeconds,
+                    request.MaxOutputChars)
+                : new RunProcessCommand(
+                    "/bin/sh",
+                    [
+                        "-lc",
+                        request.Command
+                    ],
+                    request.WorkingDirectory,
+                    request.TimeoutSeconds,
+                    request.MaxOutputChars);
+        }
+
+        private static bool ShouldUseShellFallback(string command) =>
+            LooksLikeShellLine(command) || LooksLikeWindowsShellBuiltin(command);
+
+        private static bool ShouldUseWindowsCompatibilityShell(string command)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return false;
+            }
+
+            var executable = ExtractExecutableName(command);
+            return WindowsCompatibilityCommands.Contains(executable);
+        }
+
+        private static string BuildWindowsCompatibilityCommand(string command, string[]? args)
+        {
+            var executable = ExtractExecutableName(command);
+            var commandArgs = args is { Length: > 0 }
+                ? args
+                : SplitBareCommandArguments(command).Skip(1).ToArray();
+
+            return executable switch
+            {
+                "ls" => BuildPowerShellLsCommand(commandArgs),
+                "grep" => WindowsCompatibilityPrelude + "grep " + JoinPowerShellArguments(commandArgs),
+                "pgrep" => WindowsCompatibilityPrelude + "pgrep " + JoinPowerShellArguments(commandArgs),
+                _ => command
+            };
+        }
+
+        private static string BuildPowerShellLsCommand(IReadOnlyCollection<string> args)
+        {
+            var force = false;
+            var paths = new List<string>();
+
+            foreach (var arg in args)
+            {
+                if (arg.StartsWith("-", StringComparison.Ordinal))
+                {
+                    force |= arg.Contains('a', StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                paths.Add(arg);
+            }
+
+            var parts = new List<string> { "Get-ChildItem" };
+            if (force)
+            {
+                parts.Add("-Force");
+            }
+
+            parts.AddRange(paths.Select(QuotePowerShellArgument));
+            return string.Join(" ", parts);
+        }
+
+        private static string ExtractExecutableName(string command)
+        {
+            var first = SplitBareCommandArguments(command).FirstOrDefault() ?? command;
+            return Path.GetFileNameWithoutExtension(first.Trim()).ToLowerInvariant();
+        }
+
+        private static IReadOnlyList<string> SplitBareCommandArguments(string command) =>
+            command.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        private static string JoinPowerShellArguments(IEnumerable<string> args) =>
+            string.Join(" ", args.Select(QuotePowerShellArgument));
+
+        private static string QuotePowerShellArgument(string value) =>
+            "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+
+        private static bool LooksLikeShellLine(string command) =>
+            command.Contains(' ') || command.Contains('\t') || command.Contains('|') || command.Contains('&') || command.Contains(';');
+
+        private static bool LooksLikeWindowsShellBuiltin(string command) =>
+            OperatingSystem.IsWindows() &&
+            WindowsShellBuiltins.Contains(command);
+
+        private static readonly System.Collections.Generic.HashSet<string> WindowsShellBuiltins = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "cd",
+            "cls",
+            "copy",
+            "del",
+            "dir",
+            "echo",
+            "erase",
+            "md",
+            "mkdir",
+            "move",
+            "popd",
+            "pushd",
+            "pwd",
+            "rd",
+            "ren",
+            "rename",
+            "rmdir",
+            "type"
+        };
+
+        private static readonly System.Collections.Generic.HashSet<string> WindowsCompatibilityCommands = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "grep",
+            "ls",
+            "pgrep"
+        };
+
+        private const string WindowsCompatibilityPrelude =
+            "if (-not (Get-Command grep -ErrorAction SilentlyContinue)) { " +
+            "function global:grep { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Args) " +
+            "if ($Args.Count -eq 0) { throw 'grep requires a pattern.' } " +
+            "$pattern = $Args[0]; " +
+            "$paths = if ($Args.Count -gt 1) { $Args[1..($Args.Count - 1)] } else { @('*') }; " +
+            "Select-String -Pattern $pattern -Path $paths } }; " +
+            "if (-not (Get-Command pgrep -ErrorAction SilentlyContinue)) { " +
+            "function global:pgrep { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Args) " +
+            "if ($Args.Count -eq 0) { Get-Process | Select-Object -ExpandProperty Id } " +
+            "else { Get-Process | Where-Object { $_.ProcessName -like \"*$($Args[0])*\" } | Select-Object -ExpandProperty Id } } }; ";
     }
 }

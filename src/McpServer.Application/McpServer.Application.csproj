@@ -18,9 +18,12 @@
     <Compile Remove="Abstractions\Mcp\IToolHandler`1.cs" />
     <Compile Remove="Abstractions\Mcp\IToolRegistry.cs" />
     <Compile Remove="DependencyInjection\**\*.cs" />
+    <Compile Remove="Files\FileSystemService.cs" />
+    <Compile Remove="Files\IFileSystemService.cs" />
     <Compile Remove="Files\Results\DirectoryEntry.cs" />
     <Compile Remove="Files\Results\FileResults.cs" />
     <Compile Remove="Mcp\ToolRegistry.cs" />
+    <Compile Remove="Mcp\Tools\ExecRunProcessToolHandler.cs" />
     <Compile Remove="Mcp\Tools\SshExecToolHandler.cs" />
     <Compile Remove="Mcp\Tools\WebFetchToolHandler.cs" />
     <Compile Remove="Web\FetchedPageResult.cs" />

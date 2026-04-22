@@ -17,12 +17,7 @@ public sealed class FsFileTextResourceHandler(
     public string Description => "Reads text file content from allowed roots.";
 
     public ResourceDescriptor Describe() =>
-        new(
-            Name: "file",
-            Title: "File text resource",
-            Uri: "file:///workspace/example.txt",
-            Description: Description,
-            MimeType: "text/plain");
+        new("file", "File text resource", "file:///workspace/example.txt", Description, "text/plain");
 
     public async ValueTask<Fin<ReadResourceResult>> ReadAsync(string uri, CancellationToken ct)
     {
@@ -45,7 +40,7 @@ public sealed class FsFileTextResourceHandler(
         return result.Map(r =>
         {
             logger.LogInformation("Resource read completed for {Uri}", uri);
-            return new ReadResourceResult([new ResourceContent(uri, "text/plain", Text: r.Content)]);
+            return new ReadResourceResult([new ResourceContent(uri, "text/plain", text: r.Content)]);
         });
     }
 }

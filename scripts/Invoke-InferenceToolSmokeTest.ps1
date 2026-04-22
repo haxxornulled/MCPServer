@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$InferenceBaseUrl = 'http://192.168.96.1:1234',
+    [string]$InferenceBaseUrl = 'http://192.168.50.44:1234',
     [string]$Model,
     [string]$ScenarioPath = (Join-Path $PSScriptRoot 'inference-tool-scenarios.json'),
     [ValidateSet('Release', 'Debug')]
@@ -130,12 +130,29 @@ function Send-McpMessage {
         return $null
     }
 
-    $line = Read-LineWithTimeout -Reader $Process.StandardOutput -TimeoutSeconds $TimeoutSeconds
-    if ([string]::IsNullOrWhiteSpace($line)) {
-        throw 'Received empty MCP response.'
+    $expectedId = $null
+    if ($Payload -is [System.Collections.IDictionary] -and $Payload.Contains('id')) {
+        $expectedId = $Payload['id']
+    }
+    elseif ($Payload.PSObject.Properties.Name -contains 'id') {
+        $expectedId = $Payload.id
     }
 
-    return $line | ConvertFrom-Json -Depth 50
+    while ($true) {
+        $line = Read-LineWithTimeout -Reader $Process.StandardOutput -TimeoutSeconds $TimeoutSeconds
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            throw 'Received empty MCP response.'
+        }
+
+        $message = $line | ConvertFrom-Json -Depth 50
+        if ($null -eq $expectedId) {
+            return $message
+        }
+
+        if ($message.PSObject.Properties.Name -contains 'id' -and $message.id -eq $expectedId) {
+            return $message
+        }
+    }
 }
 
 function Get-ModelList {
@@ -215,6 +232,24 @@ function Get-ScenarioProperty {
     return $DefaultValue
 }
 
+function Get-ObjectPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]$InputObject,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    $property = $InputObject.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 function Get-McpErrorText {
     param([Parameter(Mandatory = $true)]$Payload)
 
@@ -250,11 +285,12 @@ function Write-ScenarioStatus {
 function Get-ToolResultText {
     param([Parameter(Mandatory = $true)]$ToolCallResult)
 
-    if ($ToolCallResult.PSObject.Properties.Name -notcontains 'result' -or $null -eq $ToolCallResult.result) {
+    $result = Get-ObjectPropertyValue -InputObject $ToolCallResult -PropertyName 'result'
+    if ($null -eq $result) {
         return ConvertTo-CompactJson -Value $ToolCallResult
     }
 
-    return ConvertTo-CompactJson -Value $ToolCallResult.result
+    return ConvertTo-CompactJson -Value $result
 }
 
 function Test-ScenarioExpectations {
@@ -266,8 +302,12 @@ function Test-ScenarioExpectations {
 
     $serializedToolResult = Get-ToolResultText -ToolCallResult $ToolCallResult
     $isError = $false
-    if ($ToolCallResult.PSObject.Properties.Name -contains 'result' -and $null -ne $ToolCallResult.result -and $ToolCallResult.result.PSObject.Properties.Name -contains 'isError' -and $null -ne $ToolCallResult.result.isError) {
-        $isError = [bool]$ToolCallResult.result.isError
+    $result = Get-ObjectPropertyValue -InputObject $ToolCallResult -PropertyName 'result'
+    if ($null -ne $result) {
+        $isErrorValue = Get-ObjectPropertyValue -InputObject $result -PropertyName 'isError'
+        if ($null -ne $isErrorValue) {
+            $isError = [bool]$isErrorValue
+        }
     }
 
     $expectedError = $false
@@ -331,7 +371,7 @@ try {
         }
     }
 
-    if ($null -eq $initializeResponse.result) {
+    if ($null -eq (Get-ObjectPropertyValue -InputObject $initializeResponse -PropertyName 'result')) {
         throw 'Initialize did not return a result.'
     }
 
@@ -347,11 +387,12 @@ try {
         params = @{}
     }
 
-    if ($null -eq $toolListResponse.result -or $null -eq $toolListResponse.result.tools) {
+    $toolListResult = Get-ObjectPropertyValue -InputObject $toolListResponse -PropertyName 'result'
+    if ($null -eq $toolListResult -or $null -eq (Get-ObjectPropertyValue -InputObject $toolListResult -PropertyName 'tools')) {
         throw 'tools/list did not return any tools.'
     }
 
-    $registeredTools = @($toolListResponse.result.tools)
+    $registeredTools = @(Get-ObjectPropertyValue -InputObject $toolListResult -PropertyName 'tools')
     $registeredToolNames = @($registeredTools | ForEach-Object { [string]$_.name })
     Write-Host ('Registered tools: ' + ($registeredToolNames -join ', '))
 
@@ -362,8 +403,13 @@ try {
     $scenarioByTool = @{}
     $scenarioOrder = New-Object System.Collections.Generic.List[string]
     foreach ($scenario in $scenarios) {
-        $scenarioByTool[[string]$scenario.tool] = $scenario
-        $scenarioOrder.Add([string]$scenario.tool)
+        $toolName = [string]$scenario.tool
+        if (-not $scenarioByTool.ContainsKey($toolName)) {
+            $scenarioByTool[$toolName] = New-Object System.Collections.Generic.List[object]
+            $scenarioOrder.Add($toolName)
+        }
+
+        $scenarioByTool[$toolName].Add($scenario)
     }
 
     $registeredToolByName = @{}
@@ -446,6 +492,19 @@ try {
     $resultByTool = @{}
     $nextRequestId = 100
 
+    function Add-ToolResult {
+        param(
+            [Parameter(Mandatory = $true)][string]$ToolName,
+            [Parameter(Mandatory = $true)]$Result
+        )
+
+        if (-not $resultByTool.ContainsKey($ToolName)) {
+            $resultByTool[$ToolName] = New-Object System.Collections.Generic.List[object]
+        }
+
+        $resultByTool[$ToolName].Add($Result)
+    }
+
     foreach ($tool in $selectedTools) {
         $toolName = [string]$tool.name
         if (-not $scenarioByTool.ContainsKey($toolName)) {
@@ -457,179 +516,192 @@ try {
             continue
         }
 
-        $scenario = $scenarioByTool[$toolName]
-        Write-Host "Running inference scenario for $toolName"
-
-        $dependencyNames = @(Get-ScenarioProperty -Scenario $scenario -PropertyName 'dependsOn' -DefaultValue @())
-        $blockingDependencies = @(
-            foreach ($dependencyName in $dependencyNames) {
-                if (-not $resultByTool.ContainsKey([string]$dependencyName)) {
-                    [string]$dependencyName
-                    continue
-                }
-
-                $dependencyResult = $resultByTool[[string]$dependencyName]
-                if ($dependencyResult.Status -ne 'Passed') {
-                    [string]$dependencyName
-                }
+        $scenarioEntries = $scenarioByTool[$toolName]
+        for ($scenarioIndex = 0; $scenarioIndex -lt $scenarioEntries.Count; $scenarioIndex++) {
+            $scenario = $scenarioEntries[$scenarioIndex]
+            $scenarioLabel = if ($scenarioEntries.Count -gt 1) {
+                "$toolName ($($scenarioIndex + 1)/$($scenarioEntries.Count))"
             }
-        )
-
-        if ($blockingDependencies.Count -gt 0) {
-            $dependencyDetail = 'Skipped because required scenario(s) did not pass: ' + ($blockingDependencies -join ', ')
-            $skippedResult = [pscustomobject]@{
-                Tool = $toolName
-                Status = 'Skipped'
-                Detail = $dependencyDetail
+            else {
+                $toolName
             }
-            $results.Add($skippedResult)
-            $resultByTool[$toolName] = $skippedResult
-            Write-ScenarioStatus -ToolName $toolName -Status 'Skipped' -Detail $dependencyDetail
-            continue
-        }
 
-        try {
-            $messages = @(
-                @{
-                    role = 'system'
-                    content = 'You are validating MCP tool integration. Call the provided tool with the exact arguments requested by the user. After the tool result is returned, summarize the outcome in one short sentence.'
-                },
-                @{
-                    role = 'user'
-                    content = [string]$scenario.prompt
+            Write-Host "Running inference scenario for $scenarioLabel"
+
+            $dependencyNames = @(Get-ScenarioProperty -Scenario $scenario -PropertyName 'dependsOn' -DefaultValue @())
+            $blockingDependencies = @(
+                foreach ($dependencyName in $dependencyNames) {
+                    $dependencyResults = @($results.ToArray() | Where-Object { [string]$_.Tool -eq [string]$dependencyName })
+                    if ($dependencyResults.Count -eq 0) {
+                        [string]$dependencyName
+                        continue
+                    }
+
+                    if ($dependencyResults | Where-Object { $_.Status -eq 'Failed' -or $_.Status -eq 'Skipped' }) {
+                        [string]$dependencyName
+                    }
                 }
             )
 
-            $openAiTool = @(Convert-McpToolToOpenAiTool -Tool $tool)
-            $assistantText = ''
-            $toolCallResult = $null
-            $completed = $false
-            $lastToolArguments = $null
-            $lastToolResultText = $null
-            $lastAssistantMessage = $null
-            $lastModelResponse = $null
+            if ($blockingDependencies.Count -gt 0) {
+                $dependencyDetail = 'Skipped because required scenario(s) did not pass: ' + ($blockingDependencies -join ', ')
+                $skippedResult = [pscustomobject]@{
+                    Tool = $toolName
+                    Status = 'Skipped'
+                    Detail = $dependencyDetail
+                    Scenario = [string]$scenario.prompt
+                }
+                $results.Add($skippedResult)
+                Add-ToolResult -ToolName $toolName -Result $skippedResult
+                Write-ScenarioStatus -ToolName $scenarioLabel -Status 'Skipped' -Detail $dependencyDetail
+                continue
+            }
 
-            for ($turn = 0; $turn -lt $MaxConversationTurns; $turn++) {
-                $completion = Invoke-ChatCompletion -BaseUrl $InferenceBaseUrl -ModelName $Model -Messages $messages -Tools $openAiTool -TimeoutSeconds $InferenceTimeoutSeconds -ToolName $toolName
-                $lastModelResponse = ConvertTo-CompactJson -Value $completion
-                $choice = $completion.choices[0].message
-                $lastAssistantMessage = [string]$choice.content
-                $toolCalls = @($choice.tool_calls)
-
-                if ($toolCalls.Count -eq 0) {
-                    $assistantText = [string]$choice.content
-                    if ($null -eq $toolCallResult) {
-                        throw 'Model returned a final assistant message before issuing a tool call.'
+            try {
+                $messages = @(
+                    @{
+                        role = 'system'
+                        content = 'You are validating MCP tool integration. Call the provided tool with the exact arguments requested by the user. After the tool result is returned, summarize the outcome in one short sentence.'
+                    },
+                    @{
+                        role = 'user'
+                        content = [string]$scenario.prompt
                     }
+                )
 
-                    Test-ScenarioExpectations -Scenario $scenario -ToolCallResult $toolCallResult -AssistantText $assistantText
-                    $completed = $true
-                    break
-                }
+                $openAiTool = @(Convert-McpToolToOpenAiTool -Tool $tool)
+                $assistantText = ''
+                $toolCallResult = $null
+                $completed = $false
+                $lastToolArguments = $null
+                $lastToolResultText = $null
+                $lastAssistantMessage = $null
+                $lastModelResponse = $null
 
-                $toolCall = $toolCalls[0]
-                if ([string]$toolCall.function.name -ne $toolName) {
-                    throw "Model called unexpected tool '$($toolCall.function.name)' while testing '$toolName'."
-                }
+                for ($turn = 0; $turn -lt $MaxConversationTurns; $turn++) {
+                    $completion = Invoke-ChatCompletion -BaseUrl $InferenceBaseUrl -ModelName $Model -Messages $messages -Tools $openAiTool -TimeoutSeconds $InferenceTimeoutSeconds -ToolName $toolName
+                    $lastModelResponse = ConvertTo-CompactJson -Value $completion
+                    $choice = $completion.choices[0].message
+                    $lastAssistantMessage = [string]$choice.content
+                    $toolCalls = @($choice.tool_calls)
 
-                $arguments = [string]$toolCall.function.arguments
-                if ([string]::IsNullOrWhiteSpace($arguments)) {
-                    throw "Model returned empty arguments for tool '$toolName'."
-                }
-
-                $lastToolArguments = $arguments
-
-                try {
-                    $parsedArguments = $arguments | ConvertFrom-Json -Depth 50
-                }
-                catch {
-                    throw "Model returned invalid JSON arguments for '$toolName': $arguments"
-                }
-
-                $toolCallResult = Send-McpMessage -Process $process -TimeoutSeconds $McpTimeoutSeconds -Payload @{
-                    jsonrpc = '2.0'
-                    id = $nextRequestId
-                    method = 'tools/call'
-                    params = @{
-                        name = $toolName
-                        arguments = $parsedArguments
-                    }
-                }
-                $nextRequestId++
-
-                $mcpErrorText = Get-McpErrorText -Payload $toolCallResult
-                $lastToolResultText = Get-ToolResultText -ToolCallResult $toolCallResult
-                if (-not [string]::IsNullOrWhiteSpace($mcpErrorText)) {
-                    throw "$mcpErrorText. Arguments: $arguments. Payload: $lastToolResultText"
-                }
-
-                $messages += @{
-                    role = 'assistant'
-                    content = $choice.content
-                    tool_calls = @(
-                        @{
-                            id = [string]$toolCall.id
-                            type = 'function'
-                            function = @{
-                                name = $toolName
-                                arguments = $arguments
-                            }
+                    if ($toolCalls.Count -eq 0) {
+                        $assistantText = [string]$choice.content
+                        if ($null -eq $toolCallResult) {
+                            throw 'Model returned a final assistant message before issuing a tool call.'
                         }
-                    )
+
+                        Test-ScenarioExpectations -Scenario $scenario -ToolCallResult $toolCallResult -AssistantText $assistantText
+                        $completed = $true
+                        break
+                    }
+
+                    $toolCall = $toolCalls[0]
+                    if ([string]$toolCall.function.name -ne $toolName) {
+                        throw "Model called unexpected tool '$($toolCall.function.name)' while testing '$toolName'."
+                    }
+
+                    $arguments = [string]$toolCall.function.arguments
+                    if ([string]::IsNullOrWhiteSpace($arguments)) {
+                        throw "Model returned empty arguments for tool '$toolName'."
+                    }
+
+                    $lastToolArguments = $arguments
+
+                    try {
+                        $parsedArguments = $arguments | ConvertFrom-Json -Depth 50
+                    }
+                    catch {
+                        throw "Model returned invalid JSON arguments for '$toolName': $arguments"
+                    }
+
+                    $toolCallResult = Send-McpMessage -Process $process -TimeoutSeconds $McpTimeoutSeconds -Payload @{
+                        jsonrpc = '2.0'
+                        id = $nextRequestId
+                        method = 'tools/call'
+                        params = @{
+                            name = $toolName
+                            arguments = $parsedArguments
+                        }
+                    }
+                    $nextRequestId++
+
+                    $mcpErrorText = Get-McpErrorText -Payload $toolCallResult
+                    $lastToolResultText = Get-ToolResultText -ToolCallResult $toolCallResult
+                    if (-not [string]::IsNullOrWhiteSpace($mcpErrorText)) {
+                        throw "$mcpErrorText. Arguments: $arguments. Payload: $lastToolResultText"
+                    }
+
+                    $messages += @{
+                        role = 'assistant'
+                        content = $choice.content
+                        tool_calls = @(
+                            @{
+                                id = [string]$toolCall.id
+                                type = 'function'
+                                function = @{
+                                    name = $toolName
+                                    arguments = $arguments
+                                }
+                            }
+                        )
+                    }
+
+                    $messages += @{
+                        role = 'tool'
+                        tool_call_id = [string]$toolCall.id
+                        content = $lastToolResultText
+                    }
                 }
 
-                $messages += @{
-                    role = 'tool'
-                    tool_call_id = [string]$toolCall.id
-                    content = $lastToolResultText
+                if (-not $completed) {
+                    throw "Scenario for '$toolName' exceeded $MaxConversationTurns turns without a final assistant message."
                 }
-            }
 
-            if (-not $completed) {
-                throw "Scenario for '$toolName' exceeded $MaxConversationTurns turns without a final assistant message."
+                $passedResult = [pscustomobject]@{
+                    Tool = $toolName
+                    Status = 'Passed'
+                    Detail = $assistantText
+                    Scenario = [string]$scenario.prompt
+                }
+                $results.Add($passedResult)
+                Add-ToolResult -ToolName $toolName -Result $passedResult
+                Write-ScenarioStatus -ToolName $scenarioLabel -Status 'Passed' -Detail $assistantText
             }
+            catch {
+                $detail = $_.Exception.Message
+                $failureContext = New-Object System.Collections.Generic.List[string]
 
-            $passedResult = [pscustomobject]@{
-                Tool = $toolName
-                Status = 'Passed'
-                Detail = $assistantText
-            }
-            $results.Add($passedResult)
-            $resultByTool[$toolName] = $passedResult
-            Write-ScenarioStatus -ToolName $toolName -Status 'Passed' -Detail $assistantText
-        }
-        catch {
-            $detail = $_.Exception.Message
-            $failureContext = New-Object System.Collections.Generic.List[string]
+                if ($null -ne $lastToolArguments) {
+                    $failureContext.Add('Arguments: ' + $lastToolArguments)
+                }
 
-            if ($null -ne $lastToolArguments) {
-                $failureContext.Add('Arguments: ' + $lastToolArguments)
-            }
+                if ($null -ne $lastAssistantMessage -and -not [string]::IsNullOrWhiteSpace($lastAssistantMessage)) {
+                    $failureContext.Add('Assistant: ' + $lastAssistantMessage)
+                }
 
-            if ($null -ne $lastAssistantMessage -and -not [string]::IsNullOrWhiteSpace($lastAssistantMessage)) {
-                $failureContext.Add('Assistant: ' + $lastAssistantMessage)
-            }
+                if ($null -ne $lastToolResultText) {
+                    $failureContext.Add('ToolResult: ' + $lastToolResultText)
+                }
 
-            if ($null -ne $lastToolResultText) {
-                $failureContext.Add('ToolResult: ' + $lastToolResultText)
-            }
+                if ($null -eq $lastToolResultText -and $null -ne $lastModelResponse) {
+                    $failureContext.Add('ModelResponse: ' + $lastModelResponse)
+                }
 
-            if ($null -eq $lastToolResultText -and $null -ne $lastModelResponse) {
-                $failureContext.Add('ModelResponse: ' + $lastModelResponse)
-            }
+                if ($failureContext.Count -gt 0) {
+                    $detail = $detail + ' | ' + ($failureContext -join ' | ')
+                }
 
-            if ($failureContext.Count -gt 0) {
-                $detail = $detail + ' | ' + ($failureContext -join ' | ')
+                $failedResult = [pscustomobject]@{
+                    Tool = $toolName
+                    Status = 'Failed'
+                    Detail = $detail
+                    Scenario = [string]$scenario.prompt
+                }
+                $results.Add($failedResult)
+                Add-ToolResult -ToolName $toolName -Result $failedResult
+                Write-ScenarioStatus -ToolName $scenarioLabel -Status 'Failed' -Detail $detail
             }
-
-            $failedResult = [pscustomobject]@{
-                Tool = $toolName
-                Status = 'Failed'
-                Detail = $detail
-            }
-            $results.Add($failedResult)
-            $resultByTool[$toolName] = $failedResult
-            Write-ScenarioStatus -ToolName $toolName -Status 'Failed' -Detail $detail
         }
     }
 

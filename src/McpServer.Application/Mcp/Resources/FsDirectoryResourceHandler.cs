@@ -17,12 +17,7 @@ public sealed class FsDirectoryResourceHandler(
     public string Description => "Lists a directory within allowed roots.";
 
     public ResourceDescriptor Describe() =>
-        new(
-            Name: "dir",
-            Title: "Directory listing resource",
-            Uri: "dir:///workspace",
-            Description: Description,
-            MimeType: "application/json");
+        new("dir", "Directory listing resource", "dir:///workspace", Description, "application/json");
 
     public async ValueTask<Fin<ReadResourceResult>> ReadAsync(string uri, CancellationToken ct)
     {
@@ -46,7 +41,7 @@ public sealed class FsDirectoryResourceHandler(
         {
             var json = JsonSerializer.Serialize(r, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
             logger.LogInformation("Directory resource read completed for {Uri}", uri);
-            return new ReadResourceResult([new ResourceContent(uri, "application/json", Text: json)]);
+            return new ReadResourceResult([new ResourceContent(uri, "application/json", text: json)]);
         });
     }
 }

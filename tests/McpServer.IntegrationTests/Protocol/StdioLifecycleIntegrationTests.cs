@@ -78,6 +78,36 @@ public sealed class StdioLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task Host_Should_Not_Write_Routine_Startup_Logs_To_Stderr()
+    {
+        await using var server = await StdioTestServerProcess.StartAsync(HostProjectPath);
+        var client = new JsonRpcTestClient(server.Input, server.Output);
+
+        _ = await client.SendRequestAsync(new
+        {
+            jsonrpc = "2.0",
+            id = 1,
+            method = "initialize",
+            @params = new
+            {
+                protocolVersion = "2025-03-26",
+                capabilities = new { },
+                clientInfo = new { name = "lmstudio-test", version = "1.0.0" }
+            }
+        });
+
+        await client.SendNotificationAsync(new
+        {
+            jsonrpc = "2.0",
+            method = "notifications/initialized"
+        });
+
+        await Task.Delay(500);
+
+        Assert.Empty(server.StandardErrorLines);
+    }
+
+    [Fact]
     public async Task Host_Should_Work_When_Started_From_An_Unrelated_Working_Directory()
     {
         var launchDirectory = Path.Combine(Path.GetTempPath(), "mcpserver-lmstudio-launch", Guid.NewGuid().ToString("N"));
@@ -213,6 +243,134 @@ public sealed class StdioLifecycleIntegrationTests
         Assert.Single(array);
         var content = array[0];
         Assert.Equal("smoke test ok", content.GetProperty("text").GetString());
+
+        var treeResponse = await client.SendRequestAsync(new
+        {
+            jsonrpc = "2.0",
+            id = 4,
+            method = "resources/read",
+            @params = new
+            {
+                uri = "tree:///project"
+            }
+        });
+
+        Assert.NotNull(treeResponse);
+        Assert.False(treeResponse!.RootElement.TryGetProperty("error", out _));
+
+        var treeContents = treeResponse.RootElement
+            .GetProperty("result")
+            .GetProperty("contents");
+
+        var treeArray = treeContents.EnumerateArray().ToArray();
+        Assert.Single(treeArray);
+        var treeText = treeArray[0].GetProperty("text").GetString();
+        Assert.NotNull(treeText);
+        Assert.Contains("\"smoke.txt\"", treeText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Workspace_Set_Root_Should_Update_File_Tool_Workspace_End_To_End()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "mcpserver-stdio-set-root", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workspaceRoot);
+
+        try
+        {
+            await using var server = await StdioTestServerProcess.StartAsync(HostProjectPath);
+            var client = new JsonRpcTestClient(server.Input, server.Output);
+
+            _ = await client.SendRequestAsync(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "initialize",
+                @params = new
+                {
+                    protocolVersion = "2025-03-26",
+                    capabilities = new { },
+                    clientInfo = new { name = "xunit-test", version = "1.0.0" }
+                }
+            });
+
+            await client.SendNotificationAsync(new
+            {
+                jsonrpc = "2.0",
+                method = "notifications/initialized"
+            });
+
+            var setRootResponse = await client.SendRequestAsync(new
+            {
+                jsonrpc = "2.0",
+                id = 2,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "workspace.set_root",
+                    arguments = new
+                    {
+                        path = workspaceRoot
+                    }
+                }
+            });
+
+            Assert.NotNull(setRootResponse);
+            Assert.False(setRootResponse!.RootElement.TryGetProperty("error", out _));
+
+            var writeResponse = await client.SendRequestAsync(new
+            {
+                jsonrpc = "2.0",
+                id = 3,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "fs.write_text",
+                    arguments = new
+                    {
+                        path = "after-root-switch.txt",
+                        content = "new root ok",
+                        overwrite = true
+                    }
+                }
+            });
+
+            Assert.NotNull(writeResponse);
+            Assert.False(writeResponse!.RootElement.TryGetProperty("error", out _));
+            Assert.Equal("new root ok", await File.ReadAllTextAsync(Path.Combine(workspaceRoot, "after-root-switch.txt")));
+
+            var listResponse = await client.SendRequestAsync(new
+            {
+                jsonrpc = "2.0",
+                id = 4,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "fs.list_directory",
+                    arguments = new
+                    {
+                        path = "workspace"
+                    }
+                }
+            });
+
+            Assert.NotNull(listResponse);
+            Assert.False(listResponse!.RootElement.TryGetProperty("error", out _));
+
+            var listText = listResponse.RootElement
+                .GetProperty("result")
+                .GetProperty("content")[0]
+                .GetProperty("text")
+                .GetString();
+
+            Assert.Contains("after-root-switch.txt", listText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]

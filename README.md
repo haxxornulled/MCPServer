@@ -135,12 +135,24 @@ Recommended workflow:
 
 If you install from GitHub Packages instead of using a local build, point LM Studio at the installed `mcpserver` command rather than the repository output path.
 
+To make LM Studio open a specific project folder instead of the build-output workspace, pass the workspace root through the installer:
+
+```powershell
+.\scripts\install-lmstudio-mcp.ps1 -WorkspaceRoot 'D:\PF-World-Of-Warcraft-Framework'
+```
+
 Compatibility notes:
 
 - The server negotiates MCP protocol versions and falls back to `2025-03-26` for unknown client versions to stay compatible with current MCP hosts such as LM Studio.
 - The server supports `ping`, which some MCP hosts use as a connection health check.
 - The server exposes `shell.exec` for non-interactive command execution inside the configured workspace.
+- The server exposes `fs.list_directory` for direct directory browsing without relying on shell-specific commands.
 - When the client supports MCP roots, the server asks for `roots/list` after initialization and treats the first returned root as the active project/workspace context for file and shell tools.
+- The server exposes `workspace.set_root` so clients can replace the active workspace root with an existing local directory.
+- The server exposes `workspace.select_folder` so clients can switch the active project root without leaving the current workspace.
+- The server exposes `workspace.inspect` so code-review prompts can start with a bounded workspace tree plus likely entry-file contents, including line-numbered content, in one tool call.
+- The server exposes a live `tree:///project` resource for recursive project snapshots and a `changes:///project` resource for recent file mutations.
+- The server pushes `notifications/resources/updated` for both `changes:///project` and `tree:///project`, plus `notifications/workspace/changed` with the actual mutation payload, when the change feed advances.
 - The server can optionally expose `ssh.exec` and `ssh.write_text` when SSH profiles are enabled in configuration.
 - `shell.exec` accepts both `workspace` and LM Studio's `/mcpserver-filesystem` alias as workspace roots for `workingDirectory`.
 - `shell.exec` also accepts `project` as a workspace alias when roots are available.

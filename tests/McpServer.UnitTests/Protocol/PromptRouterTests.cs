@@ -16,10 +16,10 @@ public sealed class PromptRouterTests
         handler.Name.Returns("prompt.test");
         handler.Description.Returns("test prompt");
         handler.Describe().Returns(new PromptDescriptor(
-            Name: "prompt.test",
-            Title: "Test Prompt",
-            Description: "test prompt",
-            Arguments: [new PromptArgumentDescriptor("uri", "URI", "resource uri", true)]));
+            "prompt.test",
+            "Test Prompt",
+            "test prompt",
+            [new PromptArgumentDescriptor("uri", "URI", "resource uri", true)]));
 
         var router = new PromptRouter([handler]);
         var result = router.ListPrompts();

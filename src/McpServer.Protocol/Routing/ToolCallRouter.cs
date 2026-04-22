@@ -13,10 +13,14 @@ public sealed class ToolCallRouter
     private readonly FsWriteTextToolHandler _writeTextHandler;
     private readonly FsAppendTextToolHandler _appendTextHandler;
     private readonly FsReadFileToolHandler _readFileHandler;
+    private readonly FsListDirectoryToolHandler _listDirectoryHandler;
     private readonly FsCreateDirectoryToolHandler _createDirectoryHandler;
     private readonly FsMovePathToolHandler _movePathHandler;
     private readonly FsCopyPathToolHandler _copyPathHandler;
     private readonly FsDeletePathToolHandler _deletePathHandler;
+    private readonly WorkspaceSetRootToolHandler _workspaceSetRootHandler;
+    private readonly WorkspaceSelectFolderToolHandler _workspaceSelectFolderHandler;
+    private readonly WorkspaceInspectToolHandler _workspaceInspectHandler;
     private readonly ShellExecToolHandler _shellExecHandler;
     private readonly SshExecuteToolHandler? _sshExecuteHandler;
     private readonly SshWriteTextToolHandler? _sshWriteTextHandler;
@@ -28,10 +32,14 @@ public sealed class ToolCallRouter
         FsWriteTextToolHandler writeTextHandler,
         FsAppendTextToolHandler appendTextHandler,
         FsReadFileToolHandler readFileHandler,
+        FsListDirectoryToolHandler listDirectoryHandler,
         FsCreateDirectoryToolHandler createDirectoryHandler,
         FsMovePathToolHandler movePathHandler,
         FsCopyPathToolHandler copyPathHandler,
         FsDeletePathToolHandler deletePathHandler,
+        WorkspaceSetRootToolHandler workspaceSetRootHandler,
+        WorkspaceSelectFolderToolHandler workspaceSelectFolderHandler,
+        WorkspaceInspectToolHandler workspaceInspectHandler,
         ShellExecToolHandler shellExecHandler,
         SshExecuteToolHandler? sshExecuteHandler = null,
         SshWriteTextToolHandler? sshWriteTextHandler = null,
@@ -41,10 +49,14 @@ public sealed class ToolCallRouter
         _writeTextHandler = writeTextHandler;
         _appendTextHandler = appendTextHandler;
         _readFileHandler = readFileHandler;
+        _listDirectoryHandler = listDirectoryHandler;
         _createDirectoryHandler = createDirectoryHandler;
         _movePathHandler = movePathHandler;
         _copyPathHandler = copyPathHandler;
         _deletePathHandler = deletePathHandler;
+        _workspaceSetRootHandler = workspaceSetRootHandler;
+        _workspaceSelectFolderHandler = workspaceSelectFolderHandler;
+        _workspaceInspectHandler = workspaceInspectHandler;
         _shellExecHandler = shellExecHandler;
         _sshExecuteHandler = sshExecuteHandler;
         _sshWriteTextHandler = sshWriteTextHandler;
@@ -54,10 +66,14 @@ public sealed class ToolCallRouter
             _writeTextHandler,
             _appendTextHandler,
             _readFileHandler,
+            _listDirectoryHandler,
             _createDirectoryHandler,
             _movePathHandler,
             _copyPathHandler,
             _deletePathHandler,
+            _workspaceSetRootHandler,
+            _workspaceSelectFolderHandler,
+            _workspaceInspectHandler,
             _shellExecHandler,
             _sshExecuteHandler,
             _sshWriteTextHandler,
@@ -77,10 +93,14 @@ public sealed class ToolCallRouter
             "fs.write_text" => await CallWriteTextAsync(arguments, ct).ConfigureAwait(false),
             "fs.append_text" => await CallAppendTextAsync(arguments, ct).ConfigureAwait(false),
             "fs.read_file" => await CallReadFileAsync(arguments, ct).ConfigureAwait(false),
+            "fs.list_directory" => await CallListDirectoryAsync(arguments, ct).ConfigureAwait(false),
             "fs.create_directory" => await CallCreateDirectoryAsync(arguments, ct).ConfigureAwait(false),
             "fs.move_path" => await CallMovePathAsync(arguments, ct).ConfigureAwait(false),
             "fs.copy_path" => await CallCopyPathAsync(arguments, ct).ConfigureAwait(false),
             "fs.delete_path" => await CallDeletePathAsync(arguments, ct).ConfigureAwait(false),
+            "workspace.set_root" => await CallWorkspaceSetRootAsync(arguments, ct).ConfigureAwait(false),
+            "workspace.select_folder" => await CallWorkspaceSelectFolderAsync(arguments, ct).ConfigureAwait(false),
+            "workspace.inspect" => await CallWorkspaceInspectAsync(arguments, ct).ConfigureAwait(false),
             "shell.exec" => await CallShellExecAsync(arguments, ct).ConfigureAwait(false),
             "ssh.execute" when _sshExecuteHandler is not null => await CallSshExecuteAsync(arguments, ct).ConfigureAwait(false),
             "ssh.write_text" when _sshWriteTextHandler is not null => await CallSshWriteTextAsync(arguments, ct).ConfigureAwait(false),
@@ -99,10 +119,14 @@ public sealed class ToolCallRouter
         FsWriteTextToolHandler writeTextHandler,
         FsAppendTextToolHandler appendTextHandler,
         FsReadFileToolHandler readFileHandler,
+        FsListDirectoryToolHandler listDirectoryHandler,
         FsCreateDirectoryToolHandler createDirectoryHandler,
         FsMovePathToolHandler movePathHandler,
         FsCopyPathToolHandler copyPathHandler,
         FsDeletePathToolHandler deletePathHandler,
+        WorkspaceSetRootToolHandler workspaceSetRootHandler,
+        WorkspaceSelectFolderToolHandler workspaceSelectFolderHandler,
+        WorkspaceInspectToolHandler workspaceInspectHandler,
         ShellExecToolHandler shellExecHandler,
         SshExecuteToolHandler? sshExecuteHandler,
         SshWriteTextToolHandler? sshWriteTextHandler,
@@ -114,10 +138,14 @@ public sealed class ToolCallRouter
             ToToolDto(writeTextHandler),
             ToToolDto(appendTextHandler),
             ToToolDto(readFileHandler),
+            ToToolDto(listDirectoryHandler),
             ToToolDto(createDirectoryHandler),
             ToToolDto(movePathHandler),
             ToToolDto(copyPathHandler),
             ToToolDto(deletePathHandler),
+            ToToolDto(workspaceSetRootHandler),
+            ToToolDto(workspaceSelectFolderHandler),
+            ToToolDto(workspaceInspectHandler),
             ToToolDto(shellExecHandler)
         };
 
@@ -174,6 +202,14 @@ public sealed class ToolCallRouter
             : await _readFileHandler.Handle(request, ct).ConfigureAwait(false);
     }
 
+    private async ValueTask<Fin<CallToolResult>> CallListDirectoryAsync(JsonElement arguments, CancellationToken ct)
+    {
+        var request = arguments.Deserialize<FsListDirectoryRequest>();
+        return request is null
+            ? Error.New("Invalid arguments for fs.list_directory")
+            : await _listDirectoryHandler.Handle(request, ct).ConfigureAwait(false);
+    }
+
     private async ValueTask<Fin<CallToolResult>> CallCreateDirectoryAsync(JsonElement arguments, CancellationToken ct)
     {
         var request = arguments.Deserialize<CreateDirectoryRequest>();
@@ -204,6 +240,30 @@ public sealed class ToolCallRouter
         return request is null
             ? Error.New("Invalid arguments for fs.delete_path")
             : await _deletePathHandler.Handle(request, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask<Fin<CallToolResult>> CallWorkspaceSelectFolderAsync(JsonElement arguments, CancellationToken ct)
+    {
+        var request = arguments.Deserialize<WorkspaceSelectFolderRequest>();
+        return request is null
+            ? Error.New("Invalid arguments for workspace.select_folder")
+            : await _workspaceSelectFolderHandler.Handle(request, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask<Fin<CallToolResult>> CallWorkspaceSetRootAsync(JsonElement arguments, CancellationToken ct)
+    {
+        var request = arguments.Deserialize<WorkspaceSetRootRequest>();
+        return request is null
+            ? Error.New("Invalid arguments for workspace.set_root")
+            : await _workspaceSetRootHandler.Handle(request, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask<Fin<CallToolResult>> CallWorkspaceInspectAsync(JsonElement arguments, CancellationToken ct)
+    {
+        var request = arguments.Deserialize<WorkspaceInspectRequest>();
+        return request is null
+            ? Error.New("Invalid arguments for workspace.inspect")
+            : await _workspaceInspectHandler.Handle(request, ct).ConfigureAwait(false);
     }
 
     private async ValueTask<Fin<CallToolResult>> CallShellExecAsync(JsonElement arguments, CancellationToken ct)

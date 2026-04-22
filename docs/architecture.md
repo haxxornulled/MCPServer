@@ -65,6 +65,7 @@ flowchart TD
 - process execution services
 - SSH services and SSH tool handlers when SSH profiles are enabled
 - all filesystem tool handlers
+- the workspace folder selection tool
 - the `shell.exec` tool handler
 - all resource handlers
 - all prompt handlers
@@ -138,16 +139,28 @@ Filesystem tools are always available:
 - `fs.write_text`
 - `fs.append_text`
 - `fs.read_file`
+- `fs.list_directory`
 - `fs.create_directory`
 - `fs.move_path`
 - `fs.copy_path`
 - `fs.delete_path`
+- `workspace.set_root`
+- `workspace.select_folder`
+- `workspace.inspect`
+- `tree:///project` for recursive project/workspace snapshots
 
 The host also exposes:
 
-- `shell.exec` for non-interactive command execution inside the validated workspace root
+- `shell.exec` for non-interactive command execution inside the validated project root
 
-When the client supports MCP roots, the server requests `roots/list` after initialization and promotes the returned roots to the active workspace context for that session. The first returned root becomes the primary workspace for relative file and shell paths, while the configured server workspace remains the fallback when no roots are advertised.
+The server also exposes a pollable `changes:///project` resource so clients can watch recent file mutations and project-folder switches without re-reading the whole tree.
+
+The `tree:///project` resource returns a recursive snapshot of the active project folder, and `tree:///workspace` does the same for the broader workspace root.
+
+For clients that support notifications, the host also pushes `notifications/resources/updated` and `notifications/workspace/changed` messages whenever the change feed advances.
+Those resource-update notifications target both `changes:///project` and `tree:///project` so a client can refresh either its activity log or its live tree view.
+
+When the client supports MCP roots, the server requests `roots/list` after initialization and promotes the returned roots to the active workspace context for that session. The first returned root becomes the workspace root, and the active project root starts there before the user can switch it with the folder-selection tool. Clients can also call `workspace.set_root` to replace the active workspace root with an existing local directory, which resets the active project root to the same directory and refreshes tree/change notifications. Relative file and shell paths resolve against the active project root, while the configured server workspace remains the fallback when no roots are advertised.
 
 When SSH is enabled, the host also exposes:
 
@@ -158,6 +171,8 @@ Web tools are optional and only registered when `McpServer:WebAccess:Enabled` is
 
 - `web.fetch_url`
 - `web.search`
+
+`web.search` returns a compact, model-friendly summary object with explicit query and result fields instead of a raw array dump.
 
 ## Resource Execution Flow
 
@@ -173,6 +188,7 @@ Supported resource schemes:
 - `file://` for text content
 - `dir://` for directory listings
 - `filemeta://` for metadata
+- `tree://` for recursive tree snapshots
 
 ## Prompt Execution Flow
 
@@ -194,15 +210,15 @@ The filesystem implementation in `FileSystemService` is intentionally policy-dri
 
 ### Path validation
 
-`PathPolicy` normalizes all paths and rejects anything outside the active allowed roots. For MCP-facing paths it treats `/workspace/...`, `/project/...`, and `/mcpserver-filesystem/...` as the same virtual workspace root so MCP clients can surface either a project or workspace alias without breaking file or command tools.
+`PathPolicy` normalizes all paths and rejects anything outside the active allowed roots. For MCP-facing paths it treats `/workspace/...` and `/mcpserver-filesystem/...` as the workspace root, while `/project/...` and relative paths resolve against the active project root so the server can mimic a VS Code-style folder switch.
 
 ### URI translation
 
-`ResourcePathTranslator` accepts `file`, `dir`, and `filemeta` schemes and converts them to local paths. It also supports `/project/...` as a workspace alias alongside `/workspace/...`.
+`ResourcePathTranslator` accepts `file`, `dir`, and `filemeta` schemes and converts them to local paths. It supports `/workspace/...` as the workspace root and `/project/...` as the active project root.
 
 ### Process execution
 
-`ProcessExecutionService` runs non-interactive commands with validated working directories, captured stdout/stderr, bounded output, and timeout enforcement. This keeps `shell.exec` workspace-scoped and predictable for MCP hosts.
+`ProcessExecutionService` runs non-interactive commands with validated working directories, captured stdout/stderr, bounded output, and timeout enforcement. This keeps `shell.exec` project-scoped and predictable for MCP hosts.
 
 ### SSH execution
 
@@ -264,6 +280,7 @@ The solution consistently uses `LanguageExt.Fin<T>` for non-exceptional failures
 - router behavior
 - stdio framing
 - `shell.exec` result mapping
+- workspace folder selection
 - SSH tool result mapping and profile validation
 - path comparison semantics
 - web tool result mapping

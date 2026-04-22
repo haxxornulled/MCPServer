@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using LanguageExt;
 using LanguageExt.Common;
@@ -14,7 +15,8 @@ namespace McpServer.Infrastructure.Files;
 public sealed class FileSystemService(
     IPathPolicy pathPolicy,
     IFileMutationLockProvider lockProvider,
-    ILogger<FileSystemService> logger) : IFileSystemService
+    ILogger<FileSystemService> logger,
+    IWorkspaceChangeFeed? changeFeed = null) : IFileSystemService
 {
     public async ValueTask<Fin<FileTextResult>> ReadTextAsync(ReadFileTextCommand command, CancellationToken ct)
     {
@@ -84,19 +86,17 @@ public sealed class FileSystemService(
                 return ValueTask.FromResult<Fin<DirectoryListingResult>>(Error.New($"Directory not found: {path}"));
             }
 
-            var entries = Directory
-                .EnumerateFileSystemEntries(path, command.SearchPattern ?? "*", SearchOption.TopDirectoryOnly)
-                .Select(entryPath =>
-                {
-                    var attributes = File.GetAttributes(entryPath);
-                    var isDirectory = (attributes & FileAttributes.Directory) != 0;
-                    return new DirectoryEntry(Path.GetFileName(entryPath), isDirectory);
-                })
-                .ToArray();
+            var entries = new List<DirectoryEntry>();
+            foreach (var entryPath in Directory.EnumerateFileSystemEntries(path, command.SearchPattern ?? "*", SearchOption.TopDirectoryOnly))
+            {
+                var attributes = File.GetAttributes(entryPath);
+                var isDirectory = (attributes & FileAttributes.Directory) != 0;
+                entries.Add(new DirectoryEntry(Path.GetFileName(entryPath), isDirectory));
+            }
 
-            logger.LogInformation("Listed directory {NormalizedPath} with {EntryCount} entries", path, entries.Length);
+            logger.LogInformation("Listed directory {NormalizedPath} with {EntryCount} entries", path, entries.Count);
 
-                return ValueTask.FromResult<Fin<DirectoryListingResult>>(new DirectoryListingResult(path, entries));
+                return ValueTask.FromResult<Fin<DirectoryListingResult>>(new DirectoryListingResult(path, entries.ToArray()));
         }
         catch (Exception ex)
         {
@@ -178,6 +178,7 @@ public sealed class FileSystemService(
             await File.WriteAllTextAsync(path, command.Content, encoding, ct).ConfigureAwait(false);
 
             logger.LogInformation("Wrote text file {NormalizedPath} bytes {ByteLength}", path, command.Content.Length);
+            changeFeed?.RecordChange("write", path, $"bytes={command.Content.Length}");
 
             return new FileTextResult(path, command.Content);
         }
@@ -208,25 +209,36 @@ public sealed class FileSystemService(
             EnsureDestinationParentExists(path);
 
             var encoding = ResolveEncoding(command.Encoding);
-            var bytes = encoding.GetBytes(command.Content);
+            var byteCount = encoding.GetByteCount(command.Content);
+            var rented = ArrayPool<byte>.Shared.Rent(byteCount);
 
-            await using var stream = new FileStream(
-                path,
-                FileMode.Append,
-                FileAccess.Write,
-                FileShare.Read,
-                bufferSize: 64 * 1024,
-                options: FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-            await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
-
-            if (command.Flush)
+            try
             {
-                await stream.FlushAsync(ct).ConfigureAwait(false);
-            }
+                var written = encoding.GetBytes(command.Content.AsSpan(), rented.AsSpan(0, byteCount));
 
-            logger.LogInformation("Appended text file {NormalizedPath} bytes {ByteLength}", path, bytes.Length);
-            return new FileTextResult(path, command.Content);
+                await using var stream = new FileStream(
+                    path,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.Read,
+                    bufferSize: 64 * 1024,
+                    options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+                await stream.WriteAsync(rented.AsMemory(0, written), ct).ConfigureAwait(false);
+
+                if (command.Flush)
+                {
+                    await stream.FlushAsync(ct).ConfigureAwait(false);
+                }
+
+                logger.LogInformation("Appended text file {NormalizedPath} bytes {ByteLength}", path, written);
+                changeFeed?.RecordChange("append", path, $"bytes={written}");
+                return new FileTextResult(path, command.Content);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -254,6 +266,7 @@ public sealed class FileSystemService(
         {
             Directory.CreateDirectory(path);
             logger.LogInformation("Created directory {NormalizedPath}", path);
+            changeFeed?.RecordChange("create_directory", path);
             return unit;
         }
         catch (OperationCanceledException)
@@ -320,6 +333,7 @@ public sealed class FileSystemService(
             }
 
             logger.LogInformation("Moved path from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
+            changeFeed?.RecordChange("move", destinationPath, $"from={sourcePath}");
             return unit;
         }
         catch (OperationCanceledException)
@@ -391,6 +405,7 @@ public sealed class FileSystemService(
             }
 
             logger.LogInformation("Copied path from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
+            changeFeed?.RecordChange("copy", destinationPath, $"from={sourcePath}");
             return unit;
         }
         catch (OperationCanceledException)
@@ -421,6 +436,7 @@ public sealed class FileSystemService(
             {
                 File.Delete(path);
                 logger.LogInformation("Deleted file {NormalizedPath}", path);
+                changeFeed?.RecordChange("delete", path);
                 return unit;
             }
 
@@ -428,6 +444,7 @@ public sealed class FileSystemService(
             {
                 Directory.Delete(path, recursive: command.Recursive);
                 logger.LogInformation("Deleted directory {NormalizedPath} recursive={Recursive}", path, command.Recursive);
+                changeFeed?.RecordChange("delete", path, $"recursive={command.Recursive}");
                 return unit;
             }
 

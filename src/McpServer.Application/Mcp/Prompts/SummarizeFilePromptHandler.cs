@@ -13,10 +13,9 @@ public sealed class SummarizeFilePromptHandler : IPromptHandler
 
     public PromptDescriptor Describe() =>
         new(
-            Name: Name,
-            Title: "Summarize file",
-            Description: Description,
-            Arguments:
+            Name,
+            "Summarize file",
+            Description,
             [
                 new PromptArgumentDescriptor("uri", "File resource URI", "A file:// resource URI to summarize.", true),
                 new PromptArgumentDescriptor("focus", "Focus", "Optional summary focus.", false)
@@ -41,12 +40,11 @@ public sealed class SummarizeFilePromptHandler : IPromptHandler
             : $"Focus especially on: {request.Focus}.";
 
         var result = new GetPromptResult(
-            Description: "Prompt for summarizing a file resource.",
-            Messages:
+            "Prompt for summarizing a file resource.",
             [
                 new PromptMessage(
-                    Role: "user",
-                    Content: PromptMessageContent.FromText(
+                    "user",
+                    PromptMessageContent.FromText(
                         $"Please read the resource at '{request.Uri}' and summarize it. {focusClause} Include structure, notable findings, risks, and follow-up suggestions if relevant."))
             ]);
 

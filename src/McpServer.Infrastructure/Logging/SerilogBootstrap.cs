@@ -14,7 +14,7 @@ public static class SerilogBootstrap
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("System", LogEventLevel.Warning)
             .Enrich.FromLogContext()
-            .WriteTo.Console(standardErrorFromLevel: LogEventLevel.Verbose)
+            // Avoid writing routine host logs to stdio so MCP traffic stays clean.
             .WriteTo.File(
                 path: "logs/mcp-server-.log",
                 rollingInterval: RollingInterval.Day,

@@ -17,12 +17,7 @@ public sealed class FsFileMetadataResourceHandler(
     public string Description => "Reads file or directory metadata within allowed roots.";
 
     public ResourceDescriptor Describe() =>
-        new(
-            Name: "filemeta",
-            Title: "File metadata resource",
-            Uri: "filemeta:///workspace/example.txt",
-            Description: Description,
-            MimeType: "application/json");
+        new("filemeta", "File metadata resource", "filemeta:///workspace/example.txt", Description, "application/json");
 
     public async ValueTask<Fin<ReadResourceResult>> ReadAsync(string uri, CancellationToken ct)
     {
@@ -46,7 +41,7 @@ public sealed class FsFileMetadataResourceHandler(
         {
             var json = JsonSerializer.Serialize(r, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
             logger.LogInformation("Metadata resource read completed for {Uri}", uri);
-            return new ReadResourceResult([new ResourceContent(uri, "application/json", Text: json)]);
+            return new ReadResourceResult([new ResourceContent(uri, "application/json", text: json)]);
         });
     }
 }

@@ -153,9 +153,14 @@ Primary constructors are not listed as methods.
 | --- | --- | --- |
 | `IPathPolicy` | `NormalizeAndValidateReadPath(string)` | Validates and normalizes a read path within allowed roots. |
 | `IPathPolicy` | `NormalizeAndValidateWritePath(string)` | Validates and normalizes a write path within allowed roots. |
-| `PathPolicy` | `SetAllowedRoots(IEnumerable<string>)` | Replaces the active allowed roots for the current session context. |
+| `IPathPolicy` | `SetAllowedRoots(IEnumerable<string>)` | Replaces the active allowed roots for the current session context. |
+| `IPathPolicy` | `SetProjectRoot(string)` | Updates the active project root used for relative paths. |
 | `IResourcePathTranslator` | `TryTranslateToLocalPath(string)` | Converts a resource URI to a local path. |
-| `ResourcePathTranslator` | `SetWorkspaceRoot(string)` | Replaces the active workspace root used for resource URIs. |
+| `IResourcePathTranslator` | `SetWorkspaceRoot(string)` | Replaces the active workspace root used for resource URIs. |
+| `IResourcePathTranslator` | `SetProjectRoot(string)` | Updates the active project root used for `/project/...` resource URIs. |
+| `IWorkspaceChangeFeed` | `RecordChange(string, string, string?)` | Records a file mutation or project-root change. |
+| `IWorkspaceChangeFeed` | `GetRecentChanges(int)` | Returns the most recent recorded workspace changes. |
+| `IWorkspaceFileWatcher` | `SetProjectRoot(string)` | Updates the active file watcher to the current project root. |
 | `IFileMutationLockProvider` | `AcquireAsync(string, CancellationToken)` | Acquires an async lock for one normalized path. |
 | `IFileMutationLockProvider` | `AcquireManyAsync(IEnumerable<string>, CancellationToken)` | Acquires async locks for multiple normalized paths. |
 | `IFileSystemService` | `ReadTextAsync(ReadFileTextCommand, CancellationToken)` | Reads file text. |
@@ -167,7 +172,7 @@ Primary constructors are not listed as methods.
 | `IFileSystemService` | `MovePathAsync(MovePathCommand, CancellationToken)` | Moves a file or directory. |
 | `IFileSystemService` | `CopyPathAsync(CopyPathCommand, CancellationToken)` | Copies a file or directory. |
 | `IFileSystemService` | `DeletePathAsync(DeletePathCommand, CancellationToken)` | Deletes a file or directory. |
-| `IProcessExecutionService` | `RunAsync(RunProcessCommand, CancellationToken)` | Runs a non-interactive process within the validated workspace and returns captured execution details. |
+| `IProcessExecutionService` | `RunAsync(RunProcessCommand, CancellationToken)` | Runs a non-interactive process within the validated project root and returns captured execution details. |
 
 ### Abstractions: Web
 
@@ -214,6 +219,12 @@ Primary constructors are not listed as methods.
 | `FsFileMetadataResourceHandler` | `UriScheme` / `Name` / `Description` | Advertises the `filemeta` resource. |
 | `FsFileMetadataResourceHandler` | `Describe()` | Returns the public resource descriptor for metadata reads. |
 | `FsFileMetadataResourceHandler` | `ReadAsync(string, CancellationToken)` | Reads metadata content for a `filemeta://` URI. |
+| `WorkspaceChangesResourceHandler` | `UriScheme` / `Name` / `Description` | Advertises the `changes` resource for recent file mutations. |
+| `WorkspaceChangesResourceHandler` | `Describe()` | Returns the public resource descriptor for the change feed. |
+| `WorkspaceChangesResourceHandler` | `ReadAsync(string, CancellationToken)` | Reads recent project or workspace change events. |
+| `WorkspaceTreeResourceHandler` | `UriScheme` / `Name` / `Description` | Advertises the `tree` resource for recursive workspace snapshots. |
+| `WorkspaceTreeResourceHandler` | `Describe()` | Returns the public resource descriptor for the tree snapshot. |
+| `WorkspaceTreeResourceHandler` | `ReadAsync(string, CancellationToken)` | Reads recursive project or workspace tree snapshots. |
 
 ### Tool handlers
 
@@ -228,6 +239,9 @@ Primary constructors are not listed as methods.
 | `FsReadFileToolHandler` | `Name` / `Description` | Advertises the `fs.read_file` tool. |
 | `FsReadFileToolHandler` | `GetInputSchema()` | Returns the read-file input schema. |
 | `FsReadFileToolHandler` | `Handle(FsReadFileRequest, CancellationToken)` | Reads text from a file within allowed roots. |
+| `FsListDirectoryToolHandler` | `Name` / `Description` | Advertises the `fs.list_directory` tool. |
+| `FsListDirectoryToolHandler` | `GetInputSchema()` | Returns the list-directory input schema. |
+| `FsListDirectoryToolHandler` | `Handle(FsListDirectoryRequest, CancellationToken)` | Lists directory entries within allowed roots. |
 | `FsCreateDirectoryToolHandler` | `Name` / `Description` | Advertises the `fs.create_directory` tool. |
 | `FsCreateDirectoryToolHandler` | `GetInputSchema()` | Returns the create-directory input schema. |
 | `FsCreateDirectoryToolHandler` | `Handle(CreateDirectoryRequest, CancellationToken)` | Creates a directory within allowed roots. |
@@ -240,9 +254,18 @@ Primary constructors are not listed as methods.
 | `FsDeletePathToolHandler` | `Name` / `Description` | Advertises the `fs.delete_path` tool. |
 | `FsDeletePathToolHandler` | `GetInputSchema()` | Returns the delete-path input schema. |
 | `FsDeletePathToolHandler` | `Handle(DeletePathRequest, CancellationToken)` | Deletes a file or directory within allowed roots. |
+| `WorkspaceSetRootToolHandler` | `Name` / `Description` | Advertises the `workspace.set_root` tool. |
+| `WorkspaceSetRootToolHandler` | `GetInputSchema()` | Returns the workspace-root input schema. |
+| `WorkspaceSetRootToolHandler` | `Handle(WorkspaceSetRootRequest, CancellationToken)` | Replaces the active workspace root and resets the active project root. |
+| `WorkspaceSelectFolderToolHandler` | `Name` / `Description` | Advertises the `workspace.select_folder` tool. |
+| `WorkspaceSelectFolderToolHandler` | `GetInputSchema()` | Returns the folder-selection input schema. |
+| `WorkspaceSelectFolderToolHandler` | `Handle(WorkspaceSelectFolderRequest, CancellationToken)` | Browses the current project folder and updates the active project root when a folder is selected. |
+| `WorkspaceInspectToolHandler` | `Name` / `Description` | Advertises the `workspace.inspect` tool. |
+| `WorkspaceInspectToolHandler` | `GetInputSchema()` | Returns the workspace inspection input schema. |
+| `WorkspaceInspectToolHandler` | `Handle(WorkspaceInspectRequest, CancellationToken)` | Returns a bounded review snapshot with tree entries and likely entry-file contents, including line-numbered content. |
 | `ShellExecToolHandler` | `Name` / `Description` | Advertises the `shell.exec` tool. |
 | `ShellExecToolHandler` | `GetInputSchema()` | Returns the command-execution input schema. |
-| `ShellExecToolHandler` | `Handle(ShellExecRequest, CancellationToken)` | Executes a non-interactive command in the validated workspace and returns structured output. |
+| `ShellExecToolHandler` | `Handle(ShellExecRequest, CancellationToken)` | Executes a non-interactive command in the validated project root and returns structured output. |
 | `SshExecToolHandler` | `Name` / `Description` | Advertises the `ssh.exec` tool. |
 | `SshExecToolHandler` | `GetInputSchema()` | Returns the SSH command-execution input schema. |
 | `SshExecToolHandler` | `Handle(SshExecRequest, CancellationToken)` | Executes a non-interactive shell command over SSH and returns structured output. |
@@ -254,7 +277,7 @@ Primary constructors are not listed as methods.
 | `WebFetchToolHandler` | `Handle(WebFetchUrlRequest, CancellationToken)` | Fetches a URL and maps the result into MCP content. |
 | `WebSearchToolHandler` | `Name` / `Description` | Advertises the `web.search` tool. |
 | `WebSearchToolHandler` | `GetInputSchema()` | Returns the web-search input schema. |
-| `WebSearchToolHandler` | `Handle(WebSearchRequest, CancellationToken)` | Executes a web search and maps the result into MCP content. |
+| `WebSearchToolHandler` | `Handle(WebSearchRequest, CancellationToken)` | Executes a web search and maps the result into a structured search summary. |
 
 ### Commands and result models
 
@@ -273,9 +296,15 @@ Primary constructors are not listed as methods.
 
 | Type | Member | Summary |
 | --- | --- | --- |
-| `PathPolicy` | `NormalizeAndValidateReadPath(string)` | Normalizes and validates read paths against allowed roots. |
-| `PathPolicy` | `NormalizeAndValidateWritePath(string)` | Normalizes and validates write paths against allowed roots. |
+| `PathPolicy` | `NormalizeAndValidateReadPath(string)` | Normalizes and validates read paths against allowed roots. Relative paths resolve from the active project root. |
+| `PathPolicy` | `NormalizeAndValidateWritePath(string)` | Normalizes and validates write paths against allowed roots. Relative paths resolve from the active project root. |
+| `PathPolicy` | `SetProjectRoot(string)` | Updates the active project root used for relative path resolution. |
 | `ResourcePathTranslator` | `TryTranslateToLocalPath(string)` | Converts `file`, `dir`, and `filemeta` URIs into local paths. |
+| `ResourcePathTranslator` | `SetWorkspaceRoot(string)` | Updates the workspace root used for `/workspace/...` URIs. |
+| `ResourcePathTranslator` | `SetProjectRoot(string)` | Updates the active project root used for `/project/...` URIs. |
+| `WorkspaceChangeFeed` | `RecordChange(string, string, string?)` | Appends a change event to the recent mutation feed. |
+| `WorkspaceChangeFeed` | `GetRecentChanges(int)` | Returns the most recent recorded change events. |
+| `WorkspaceFileWatcher` | `SetProjectRoot(string)` | Rebinds the filesystem watcher to a new project root. |
 | `FileMutationLockProvider` | `AcquireAsync(string, CancellationToken)` | Acquires a lock for one normalized path. |
 | `FileMutationLockProvider` | `AcquireManyAsync(IEnumerable<string>, CancellationToken)` | Acquires locks for multiple normalized paths in a stable order. |
 | `FileSystemService` | `ReadTextAsync(ReadFileTextCommand, CancellationToken)` | Reads file text with path validation. |
@@ -337,8 +366,11 @@ They validate:
 
 - stdio request/response framing
 - initialize, ping, and prompt routing behavior
-- workspace-scoped shell command execution
+- project-scoped shell command execution
 - SSH command and remote file tool behavior
 - path comparison semantics
-- web tool mapping
+- web tool mapping and web result parsing
+- file change feed/resource exposure
+- push file-change notifications over stdio
+- workspace folder selection
 - end-to-end stdio initialize response shape

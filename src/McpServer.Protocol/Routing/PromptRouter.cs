@@ -16,14 +16,14 @@ public sealed class PromptRouter(IEnumerable<IPromptHandler> handlers)
             Prompts: _byName.Values
                 .Select(x => x.Describe())
                 .Select(d => new PromptDto(
-                    Name: d.Name,
-                    Title: d.Title,
-                    Description: d.Description,
-                    Arguments: d.Arguments?.Select(a => new PromptArgumentDto(
-                        Name: a.Name,
-                        Title: a.Title,
-                        Description: a.Description,
-                        Required: a.Required)).ToArray()))
+                    d.Name,
+                    d.Title,
+                    d.Description,
+                    d.Arguments?.Select(a => new PromptArgumentDto(
+                        a.Name,
+                        a.Title,
+                        a.Description,
+                        a.Required)).ToArray()))
                 .ToArray(),
             NextCursor: null);
 
@@ -40,10 +40,10 @@ public sealed class PromptRouter(IEnumerable<IPromptHandler> handlers)
 
     private static GetPromptResultDto ToDto(GetPromptResult result) =>
         new(
-            Description: result.Description,
-            Messages: result.Messages
+            result.Description,
+            result.Messages
                 .Select(m => new PromptMessageDto(
-                    Role: m.Role,
-                    Content: PromptMessageContentDto.FromText(m.Content.Text)))
+                    m.Role,
+                    PromptMessageContentDto.FromText(m.Content.Text)))
                 .ToArray());
 }

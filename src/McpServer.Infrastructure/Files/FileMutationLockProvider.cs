@@ -1,18 +1,28 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using McpServer.Application.Abstractions.Files;
 using Microsoft.Extensions.Logging;
 
 namespace McpServer.Infrastructure.Files;
 
-public sealed class FileMutationLockProvider(
-    ILogger<FileMutationLockProvider> logger) : IFileMutationLockProvider
+public sealed class FileMutationLockProvider : IFileMutationLockProvider
 {
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(PathComparison.Comparer);
+    private const int LockStripeCount = 256;
+    private readonly SemaphoreSlim[] _locks = CreateLocks();
+    private readonly ILogger<FileMutationLockProvider> _logger;
+
+    public FileMutationLockProvider(ILogger<FileMutationLockProvider> logger)
+    {
+        _logger = logger;
+    }
 
     public async ValueTask<IAsyncDisposable> AcquireAsync(string normalizedPath, CancellationToken ct)
     {
-        var gate = _locks.GetOrAdd(normalizedPath, static _ => new SemaphoreSlim(1, 1));
+        if (string.IsNullOrWhiteSpace(normalizedPath))
+        {
+            throw new ArgumentException("Normalized path is required.", nameof(normalizedPath));
+        }
+
+        var gate = GetLock(normalizedPath);
         var started = Stopwatch.GetTimestamp();
 
         await gate.WaitAsync(ct).ConfigureAwait(false);
@@ -20,7 +30,7 @@ public sealed class FileMutationLockProvider(
         var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
         if (elapsedMs >= 25)
         {
-            logger.LogWarning(
+            _logger.LogWarning(
                 "Write lock wait detected for {NormalizedPath} after {ElapsedMs}ms",
                 normalizedPath,
                 elapsedMs);
@@ -31,10 +41,18 @@ public sealed class FileMutationLockProvider(
 
     public async ValueTask<IAsyncDisposable> AcquireManyAsync(IEnumerable<string> normalizedPaths, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(normalizedPaths);
+
         var ordered = normalizedPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(PathComparison.Comparer)
             .OrderBy(x => x, PathComparison.Comparer)
             .ToArray();
+
+        if (ordered.Length == 0)
+        {
+            return new CompositeReleaser(Array.Empty<IAsyncDisposable>());
+        }
 
         var releasers = new List<IAsyncDisposable>(ordered.Length);
 
@@ -59,22 +77,53 @@ public sealed class FileMutationLockProvider(
         }
     }
 
-    private sealed class Releaser(SemaphoreSlim gate) : IAsyncDisposable
+    private static SemaphoreSlim[] CreateLocks()
     {
+        var locks = new SemaphoreSlim[LockStripeCount];
+        for (var i = 0; i < locks.Length; i++)
+        {
+            locks[i] = new SemaphoreSlim(1, 1);
+        }
+
+        return locks;
+    }
+
+    private SemaphoreSlim GetLock(string normalizedPath)
+    {
+        var hash = PathComparison.Comparer.GetHashCode(normalizedPath) & int.MaxValue;
+        return _locks[hash % _locks.Length];
+    }
+
+    private sealed class Releaser : IAsyncDisposable
+    {
+        private readonly SemaphoreSlim _gate;
+
+        public Releaser(SemaphoreSlim gate)
+        {
+            _gate = gate;
+        }
+
         public ValueTask DisposeAsync()
         {
-            gate.Release();
+            _gate.Release();
             return ValueTask.CompletedTask;
         }
     }
 
-    private sealed class CompositeReleaser(IReadOnlyList<IAsyncDisposable> releasers) : IAsyncDisposable
+    private sealed class CompositeReleaser : IAsyncDisposable
     {
+        private readonly IReadOnlyList<IAsyncDisposable> _releasers;
+
+        public CompositeReleaser(IReadOnlyList<IAsyncDisposable> releasers)
+        {
+            _releasers = releasers;
+        }
+
         public async ValueTask DisposeAsync()
         {
-            for (var i = releasers.Count - 1; i >= 0; i--)
+            for (var i = _releasers.Count - 1; i >= 0; i--)
             {
-                await releasers[i].DisposeAsync().ConfigureAwait(false);
+                await _releasers[i].DisposeAsync().ConfigureAwait(false);
             }
         }
     }

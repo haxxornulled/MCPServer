@@ -88,4 +88,27 @@ public sealed class PathPolicyTests
             Fail: error => throw new InvalidOperationException(error.Message));
         Assert.Equal(Path.Combine(workspace, "nested", "file.txt"), normalized);
     }
+
+    [Fact]
+    public void NormalizeAndValidateWritePath_Should_Resolve_Relative_Paths_Against_Selected_Project_Root()
+    {
+        var workspace = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "mcpserver-pathpolicy-tests", Guid.NewGuid().ToString("N")));
+        var project = Path.Combine(workspace, "apps");
+        Directory.CreateDirectory(project);
+
+        var sut = new PathPolicy([workspace]);
+        sut.SetProjectRoot(project);
+
+        var result = sut.NormalizeAndValidateWritePath("note.txt");
+
+        Assert.True(
+            result.IsSucc,
+            result.Match(
+                Succ: value => value,
+                Fail: error => error.Message));
+        var normalized = result.Match(
+            Succ: value => value,
+            Fail: error => throw new InvalidOperationException(error.Message));
+        Assert.Equal(Path.Combine(project, "note.txt"), normalized);
+    }
 }

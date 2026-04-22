@@ -1,0 +1,33 @@
+[
+  {
+    "tool": "workspace.set_root",
+    "prompt": "Call workspace.set_root with path \"D:\\\\PF-World-Of-Warcraft-Framework\".",
+    "expectToolError": false,
+    "toolResultContains": [
+      "D:\\\\PF-World-Of-Warcraft-Framework"
+    ]
+  },
+  {
+    "tool": "fs.list_directory",
+    "dependsOn": [
+      "workspace.set_root"
+    ],
+    "prompt": "Call fs.list_directory with path \"workspace\".",
+    "expectToolError": false,
+    "toolResultContains": [
+      "PF_Framework.toc"
+    ]
+  },
+  {
+    "tool": "workspace.inspect",
+    "dependsOn": [
+      "workspace.set_root"
+    ],
+    "prompt": "Call workspace.inspect with path \"workspace\", maxDepth 6, maxFiles 200, and maxFileBytes 8000 so you can begin a code review.",
+    "expectToolError": false,
+    "toolResultContains": [
+      "PF_Framework.toc",
+      "README.md"
+    ]
+  }
+]

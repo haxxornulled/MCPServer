@@ -63,12 +63,10 @@ var builder = Host.CreateDefaultBuilder(args)
 
         if (redisConfigured)
         {
-            Console.Error.WriteLine("[Startup] Redis configuration present; registering VapeCache hybrid runtime.");
             services.AddVapeCache(context.Configuration);
         }
         else
         {
-            Console.Error.WriteLine("[Startup] Redis not configured; registering VapeCache in-memory fallback.");
             services.AddVapeCacheInMemory(context.Configuration)
                     .WithCacheStampedeProfile(CacheStampedeProfile.Balanced);
         }

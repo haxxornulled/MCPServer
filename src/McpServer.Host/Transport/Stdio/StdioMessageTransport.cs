@@ -28,6 +28,7 @@ public sealed class StdioMessageTransport(
         new UTF8Encoding(false),
         bufferSize: 16 * 1024,
         leaveOpen: true);
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     private int _nextRequestId = 1000;
 
@@ -59,8 +60,16 @@ public sealed class StdioMessageTransport(
             throw new InvalidOperationException("Serialized stdio MCP response must not contain embedded newlines.");
         }
 
-        await _writer.WriteLineAsync(json).ConfigureAwait(false);
-        await _writer.FlushAsync().ConfigureAwait(false);
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _writer.WriteLineAsync(json).ConfigureAwait(false);
+            await _writer.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     public async ValueTask WriteNotificationAsync(JsonRpcNotification notification, CancellationToken ct)
@@ -72,8 +81,16 @@ public sealed class StdioMessageTransport(
             throw new InvalidOperationException("Serialized stdio MCP notification must not contain embedded newlines.");
         }
 
-        await _writer.WriteLineAsync(json).ConfigureAwait(false);
-        await _writer.FlushAsync().ConfigureAwait(false);
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _writer.WriteLineAsync(json).ConfigureAwait(false);
+            await _writer.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     public async ValueTask<JsonRpcResponse?> SendRequestAsync(string method, object? parameters, CancellationToken ct)
@@ -91,8 +108,16 @@ public sealed class StdioMessageTransport(
             throw new InvalidOperationException("Serialized stdio MCP request must not contain embedded newlines.");
         }
 
-        await _writer.WriteLineAsync(json).ConfigureAwait(false);
-        await _writer.FlushAsync().ConfigureAwait(false);
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _writer.WriteLineAsync(json).ConfigureAwait(false);
+            await _writer.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
 
         while (true)
         {
@@ -126,6 +151,7 @@ public sealed class StdioMessageTransport(
     {
         _reader.Dispose();
         _writer.Dispose();
+        _writeLock.Dispose();
         return ValueTask.CompletedTask;
     }
 }

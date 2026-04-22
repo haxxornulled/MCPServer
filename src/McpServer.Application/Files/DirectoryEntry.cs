@@ -1,4 +1,14 @@
 namespace McpServer.Application.Files
 {
-    public record DirectoryEntry(string Name, bool IsDirectory);
+    public sealed record DirectoryEntry
+    {
+        public string Name { get; init; }
+        public bool IsDirectory { get; init; }
+
+        public DirectoryEntry(string name, bool isDirectory)
+        {
+            Name = name;
+            IsDirectory = isDirectory;
+        }
+    }
 }

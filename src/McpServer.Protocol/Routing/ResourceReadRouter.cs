@@ -16,12 +16,12 @@ public sealed class ResourceReadRouter(IEnumerable<IResourceHandler> handlers)
             Resources: _byScheme.Values
                 .Select(x => x.Describe())
                 .Select(d => new ResourceDto(
-                    Name: d.Name,
-                    Title: d.Title,
-                    Uri: d.Uri,
-                    Description: d.Description,
-                    MimeType: d.MimeType,
-                    Size: d.Size))
+                    d.Name,
+                    d.Title,
+                    d.Uri,
+                    d.Description,
+                    d.MimeType,
+                    d.Size))
                 .ToArray(),
             NextCursor: null);
 

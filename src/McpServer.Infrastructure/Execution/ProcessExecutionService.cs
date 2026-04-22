@@ -30,7 +30,7 @@ public sealed class ProcessExecutionService(
             var timeoutSeconds = Math.Clamp(command.TimeoutSeconds, MinimumTimeoutSeconds, MaximumTimeoutSeconds);
             var maxOutputChars = Math.Clamp(command.MaxOutputChars, MinimumOutputChars, MaximumOutputChars);
 
-            var workingDirectoryFin = pathPolicy.NormalizeAndValidateWritePath(command.WorkingDirectory ?? "workspace");
+            var workingDirectoryFin = pathPolicy.NormalizeAndValidateWritePath(command.WorkingDirectory ?? "project");
             if (workingDirectoryFin.IsFail)
             {
                 return PropagateFailure<ProcessExecutionResult>(workingDirectoryFin);

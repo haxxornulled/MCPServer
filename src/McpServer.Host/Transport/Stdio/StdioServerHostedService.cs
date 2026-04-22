@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 using System.Text.Json;
 using Autofac;
+using McpServer.Application.Abstractions.Files;
 using McpServer.Contracts.Lifecycle;
+using McpServer.Contracts.Notifications;
 using McpServer.Contracts.Prompts;
 using McpServer.Contracts.Resources;
 using McpServer.Contracts.Roots;
@@ -37,6 +40,15 @@ public sealed class StdioServerHostedService(
         var promptRouter = scope.Resolve<PromptRouter>();
         var pathPolicy = scope.Resolve<McpServer.Infrastructure.Files.PathPolicy>();
         var resourcePathTranslator = scope.Resolve<McpServer.Infrastructure.Files.ResourcePathTranslator>();
+        var changeFeed = scope.Resolve<IWorkspaceChangeFeed>();
+        var workspaceFileWatcher = scope.Resolve<IWorkspaceFileWatcher>();
+        var changeChannel = Channel.CreateUnbounded<WorkspaceChangeEntry>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
+        using var changeSubscription = SubscribeToWorkspaceChanges(changeFeed, changeChannel.Writer);
+        var notificationPump = PumpWorkspaceChangeNotificationsAsync(changeChannel.Reader, transport, logger, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -65,6 +77,7 @@ public sealed class StdioServerHostedService(
                 promptRouter,
                 pathPolicy,
                 resourcePathTranslator,
+                workspaceFileWatcher,
                 transport,
                 logger,
                 stoppingToken).ConfigureAwait(false);
@@ -87,6 +100,9 @@ public sealed class StdioServerHostedService(
             }
         }
 
+        changeChannel.Writer.TryComplete();
+        await notificationPump.ConfigureAwait(false);
+
         logger.LogInformation("MCP server stopping");
     }
 
@@ -101,6 +117,7 @@ public sealed class StdioServerHostedService(
         PromptRouter promptRouter,
         McpServer.Infrastructure.Files.PathPolicy pathPolicy,
         McpServer.Infrastructure.Files.ResourcePathTranslator resourcePathTranslator,
+        IWorkspaceFileWatcher workspaceFileWatcher,
         StdioMessageTransport transport,
         ILogger<StdioServerHostedService> logger,
         CancellationToken ct)
@@ -112,7 +129,7 @@ public sealed class StdioServerHostedService(
                 "initialize" => DispatchResult.WithResponse(HandleInitialize(request, session, initializeHandler)),
                 "ping" => DispatchResult.WithResponse(HandlePing(request)),
                 "notifications/initialized" => DispatchResult.WithResponse(
-                    await HandleInitializedAsync(request, session, transport, pathPolicy, resourcePathTranslator, logger, ct).ConfigureAwait(false)),
+                    await HandleInitializedAsync(request, session, transport, pathPolicy, resourcePathTranslator, workspaceFileWatcher, logger, ct).ConfigureAwait(false)),
                 "shutdown" => DispatchResult.WithResponse(HandleShutdown(request, session, shutdownHandler)),
                 "exit" => DispatchResult.Exit(HandleExit(session, exitHandler)),
                 "tools/list" => DispatchResult.WithResponse(
@@ -164,6 +181,7 @@ public sealed class StdioServerHostedService(
         StdioMessageTransport transport,
         McpServer.Infrastructure.Files.PathPolicy pathPolicy,
         McpServer.Infrastructure.Files.ResourcePathTranslator resourcePathTranslator,
+        IWorkspaceFileWatcher workspaceFileWatcher,
         ILogger<StdioServerHostedService> logger,
         CancellationToken ct)
     {
@@ -213,6 +231,9 @@ public sealed class StdioServerHostedService(
 
             pathPolicy.SetAllowedRoots(normalizedRoots);
             resourcePathTranslator.SetWorkspaceRoot(normalizedRoots[0]);
+            pathPolicy.SetProjectRoot(normalizedRoots[0]);
+            resourcePathTranslator.SetProjectRoot(normalizedRoots[0]);
+            workspaceFileWatcher.SetProjectRoot(normalizedRoots[0]);
             var updateRootsResult = session.UpdateClientRoots(roots);
             if (updateRootsResult.IsFail)
             {
@@ -329,6 +350,70 @@ public sealed class StdioServerHostedService(
 
     private static JsonRpcResponse? EnsureReady(JsonRpcRequest request, McpSession session) =>
         session.IsReady ? null : JsonRpcErrorFactory.SessionNotReady(request.Id);
+
+    private static IDisposable SubscribeToWorkspaceChanges(
+        IWorkspaceChangeFeed changeFeed,
+        ChannelWriter<WorkspaceChangeEntry> writer)
+    {
+        void Handler(object? sender, WorkspaceChangeEntry entry)
+        {
+            writer.TryWrite(entry);
+        }
+
+        changeFeed.Changed += Handler;
+        return new DelegateDisposable(() => changeFeed.Changed -= Handler);
+    }
+
+    private static async Task PumpWorkspaceChangeNotificationsAsync(
+        ChannelReader<WorkspaceChangeEntry> reader,
+        StdioMessageTransport transport,
+        ILogger<StdioServerHostedService> logger,
+        CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var change in reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                var resourceUpdated = new JsonRpcNotification(
+                    "2.0",
+                    "notifications/resources/updated",
+                    new ResourceUpdatedNotificationParams("changes:///project"));
+
+                await transport.WriteNotificationAsync(resourceUpdated, ct).ConfigureAwait(false);
+
+                var treeUpdated = new JsonRpcNotification(
+                    "2.0",
+                    "notifications/resources/updated",
+                    new ResourceUpdatedNotificationParams("tree:///project"));
+
+                await transport.WriteNotificationAsync(treeUpdated, ct).ConfigureAwait(false);
+
+                var workspaceChanged = new JsonRpcNotification(
+                    "2.0",
+                    "notifications/workspace/changed",
+                    new WorkspaceChangeNotificationParams(
+                        change.Operation,
+                        change.Path,
+                        change.Timestamp,
+                        change.Source,
+                        change.Details));
+
+                await transport.WriteNotificationAsync(workspaceChanged, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Workspace change notification pump stopped unexpectedly");
+        }
+    }
+
+    private sealed class DelegateDisposable(Action disposeAction) : IDisposable
+    {
+        public void Dispose() => disposeAction();
+    }
 
     private readonly record struct DispatchResult(JsonRpcResponse? Response, bool ShouldExit)
     {

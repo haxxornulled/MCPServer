@@ -11,18 +11,58 @@ public interface IResourceHandler
     ResourceDescriptor Describe();
 }
 
-public sealed record ReadResourceResult(IReadOnlyList<ResourceContent> Contents);
+public sealed record ReadResourceResult
+{
+    public IReadOnlyList<ResourceContent> Contents { get; init; }
 
-public sealed record ResourceContent(
-    string Uri,
-    string MimeType,
-    string? Text = null,
-    string? BlobBase64 = null);
+    public ReadResourceResult(IReadOnlyList<ResourceContent> contents)
+    {
+        Contents = contents;
+    }
+}
 
-public sealed record ResourceDescriptor(
-    string Name,
-    string? Title,
-    string Uri,
-    string? Description,
-    string? MimeType = null,
-    long? Size = null);
+public sealed record ResourceContent
+{
+    public string Uri { get; init; }
+    public string MimeType { get; init; }
+    public string? Text { get; init; }
+    public string? BlobBase64 { get; init; }
+
+    public ResourceContent(
+        string uri,
+        string mimeType,
+        string? text = null,
+        string? blobBase64 = null)
+    {
+        Uri = uri;
+        MimeType = mimeType;
+        Text = text;
+        BlobBase64 = blobBase64;
+    }
+}
+
+public sealed record ResourceDescriptor
+{
+    public string Name { get; init; }
+    public string? Title { get; init; }
+    public string Uri { get; init; }
+    public string? Description { get; init; }
+    public string? MimeType { get; init; }
+    public long? Size { get; init; }
+
+    public ResourceDescriptor(
+        string name,
+        string? title,
+        string uri,
+        string? description,
+        string? mimeType = null,
+        long? size = null)
+    {
+        Name = name;
+        Title = title;
+        Uri = uri;
+        Description = description;
+        MimeType = mimeType;
+        Size = size;
+    }
+}

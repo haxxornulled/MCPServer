@@ -35,14 +35,28 @@ namespace McpServer.Application.Mcp.Tools
             return result.Map(searchResults =>
             {
                 logger.LogInformation("Tool {ToolName} completed", Name);
-                
-                var content = JsonSerializer.Serialize(searchResults, new JsonSerializerOptions { WriteIndented = true });
-                
+
+                var payload = new
+                {
+                    query = request.Query,
+                    result_count = searchResults.Count,
+                    results = searchResults.Select((item, index) => new
+                    {
+                        rank = index + 1,
+                        title = item.Title,
+                        url = item.Url,
+                        snippet = item.Snippet,
+                        relevance = item.Relevance
+                    }).ToArray()
+                };
+
+                var content = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+
                 return new CallToolResult(
                 [
                     new ContentItem("text", content)
-                ], 
-                StructuredContent: searchResults);
+                ],
+                StructuredContent: payload);
             });
         }
     }

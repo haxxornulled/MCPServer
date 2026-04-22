@@ -5,9 +5,14 @@ using static LanguageExt.Prelude;
 
 namespace McpServer.Infrastructure.Web;
 
-public sealed class WebPolicy(IReadOnlySet<string>? allowedHosts = null) : IWebPolicy
+public sealed class WebPolicy : IWebPolicy
 {
-    private readonly IReadOnlySet<string>? _allowedHosts = allowedHosts;
+    private readonly IReadOnlySet<string>? _allowedHosts;
+
+    public WebPolicy(IReadOnlySet<string>? allowedHosts = null)
+    {
+        _allowedHosts = allowedHosts;
+    }
 
     public int MaxResponseBytes => 512 * 1024;
     public TimeSpan DefaultTimeout => TimeSpan.FromSeconds(15);

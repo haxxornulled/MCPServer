@@ -24,8 +24,20 @@ public sealed class JsonRpcTestClient(StreamWriter input, StreamReader output)
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
-        var line = await output.ReadLineAsync(timeoutCts.Token).ConfigureAwait(false);
-        return line is null ? null : JsonDocument.Parse(line);
+        while (true)
+        {
+            var line = await output.ReadLineAsync(timeoutCts.Token).ConfigureAwait(false);
+            if (line is null)
+            {
+                return null;
+            }
+
+            var document = JsonDocument.Parse(line);
+            if (document.RootElement.TryGetProperty("id", out _))
+            {
+                return document;
+            }
+        }
     }
 
     public async Task SendNotificationAsync(object payload, CancellationToken ct = default)

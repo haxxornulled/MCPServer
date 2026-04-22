@@ -6,7 +6,7 @@ public sealed class CapabilityProvider
 {
     public ServerCapabilitiesDto GetCapabilities() =>
         new(
-            Tools: new ToolsCapabilityDto(ListChanged: false),
+            Tools: new ToolsCapabilityDto(false),
             Resources: new ResourcesCapabilityDto(Subscribe: false, ListChanged: false),
-            Prompts: new PromptsCapabilityDto(ListChanged: false));
+            Prompts: new PromptsCapabilityDto(false));
 }

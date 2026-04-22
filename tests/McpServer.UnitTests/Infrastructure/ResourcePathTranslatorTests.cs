@@ -55,4 +55,23 @@ public sealed class ResourcePathTranslatorTests
             Fail: error => throw new InvalidOperationException(error.Message));
         Assert.Equal(Path.Combine(workspace, "folder", "test.txt"), translated);
     }
+
+    [Fact]
+    public void TryTranslateToLocalPath_Should_Use_Selected_Project_Root_For_Project_Uris()
+    {
+        var workspace = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "mcpserver-resource-tests", Guid.NewGuid().ToString("N")));
+        var project = Path.Combine(workspace, "apps");
+        Directory.CreateDirectory(project);
+
+        var sut = new ResourcePathTranslator(workspace);
+        sut.SetProjectRoot(project);
+
+        var result = sut.TryTranslateToLocalPath("file:///project/folder/test.txt");
+
+        Assert.True(result.IsSucc);
+        var translated = result.Match(
+            Succ: value => value,
+            Fail: error => throw new InvalidOperationException(error.Message));
+        Assert.Equal(Path.Combine(project, "folder", "test.txt"), translated);
+    }
 }

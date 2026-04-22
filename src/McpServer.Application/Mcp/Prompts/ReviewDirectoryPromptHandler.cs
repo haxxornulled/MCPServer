@@ -13,10 +13,9 @@ public sealed class ReviewDirectoryPromptHandler : IPromptHandler
 
     public PromptDescriptor Describe() =>
         new(
-            Name: Name,
-            Title: "Review directory",
-            Description: Description,
-            Arguments:
+            Name,
+            "Review directory",
+            Description,
             [
                 new PromptArgumentDescriptor("uri", "Directory resource URI", "A dir:// resource URI to review.", true),
                 new PromptArgumentDescriptor("goal", "Goal", "Optional review goal.", false)
@@ -37,17 +36,19 @@ public sealed class ReviewDirectoryPromptHandler : IPromptHandler
         }
 
         var goalClause = string.IsNullOrWhiteSpace(request.Goal)
-            ? "Review the directory for structure, important files, possible concerns, and suggested next steps."
+            ? "Review the directory for concrete bugs, behavioral risks, fragile assumptions, missing tests, and maintainability issues."
             : $"Review the directory with this goal in mind: {request.Goal}.";
 
         var result = new GetPromptResult(
-            Description: "Prompt for reviewing a directory resource.",
-            Messages:
+            "Prompt for reviewing a directory resource.",
             [
                 new PromptMessage(
-                    Role: "user",
-                    Content: PromptMessageContent.FromText(
-                        $"Please inspect the resource at '{request.Uri}'. {goalClause}"))
+                    "user",
+                    PromptMessageContent.FromText(
+                        $"Please inspect the resource at '{request.Uri}'. {goalClause} " +
+                        "Use workspace.inspect first if available, then read specific source files before making claims. " +
+                        "Return findings first, ordered by severity. Each finding must cite a concrete file path and line number from lineNumberedContent when possible. " +
+                        "Avoid high-level architecture praise unless it supports a specific finding. If you do not have enough source context, call more file tools instead of asking the user to paste files."))
             ]);
 
         return ValueTask.FromResult<Fin<GetPromptResult>>(result);

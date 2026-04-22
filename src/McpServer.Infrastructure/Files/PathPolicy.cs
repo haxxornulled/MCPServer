@@ -6,14 +6,19 @@ namespace McpServer.Infrastructure.Files;
 
 public sealed class PathPolicy : IPathPolicy
 {
-    private static readonly string[] WorkspaceAliases = ["workspace", "project", "mcpserver-filesystem"];
+    private static readonly string[] WorkspaceAliases = ["workspace", "mcpserver-filesystem"];
+    private static readonly string[] ProjectAliases = ["project"];
     private readonly object _sync = new();
     private string[] _roots;
     private string[] _rootPrefixes;
+    private string _workspaceRoot;
+    private string _projectRoot;
 
     public PathPolicy(IEnumerable<string> allowedRoots)
     {
         (_roots, _rootPrefixes) = BuildRootCache(allowedRoots);
+        _workspaceRoot = _roots.FirstOrDefault() ?? string.Empty;
+        _projectRoot = _workspaceRoot;
     }
 
     public Fin<string> NormalizeAndValidateReadPath(string rawPath) => Normalize(rawPath);
@@ -26,6 +31,29 @@ public sealed class PathPolicy : IPathPolicy
         {
             _roots = cache.Roots;
             _rootPrefixes = cache.RootPrefixes;
+            _workspaceRoot = _roots.FirstOrDefault() ?? string.Empty;
+            _projectRoot = _workspaceRoot;
+        }
+    }
+
+    public void SetProjectRoot(string projectRoot)
+    {
+        var normalized = Path.GetFullPath(projectRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        lock (_sync)
+        {
+            if (_roots.Length == 0)
+            {
+                _projectRoot = normalized;
+                return;
+            }
+
+            if (!IsUnderAllowedRoot(normalized, _roots, _rootPrefixes))
+            {
+                throw new InvalidOperationException($"Project root '{projectRoot}' is outside the allowed roots.");
+            }
+
+            _projectRoot = normalized;
         }
     }
 
@@ -65,13 +93,18 @@ public sealed class PathPolicy : IPathPolicy
 
     private string ResolvePath(string rawPath)
     {
-        var roots = _roots;
-        var primaryRoot = roots[0];
+        var workspaceRoot = _workspaceRoot;
+        var projectRoot = _projectRoot;
         var trimmed = rawPath.Trim();
 
-        if (TryResolveWorkspaceRelativePath(trimmed, out var relativePath))
+        if (TryResolveRelativePath(trimmed, WorkspaceAliases, out var relativePath))
         {
-            return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(primaryRoot, relativePath)));
+            return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(workspaceRoot, relativePath)));
+        }
+
+        if (TryResolveRelativePath(trimmed, ProjectAliases, out relativePath))
+        {
+            return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(projectRoot, relativePath)));
         }
 
         if (Path.IsPathRooted(trimmed))
@@ -79,10 +112,10 @@ public sealed class PathPolicy : IPathPolicy
             return TrimTrailingSeparators(Path.GetFullPath(trimmed));
         }
 
-        return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(primaryRoot, trimmed)));
+        return TrimTrailingSeparators(Path.GetFullPath(Path.Combine(projectRoot, trimmed)));
     }
 
-    private static bool TryResolveWorkspaceRelativePath(string rawPath, out string relativePath)
+    private static bool TryResolveRelativePath(string rawPath, IReadOnlyList<string> aliases, out string relativePath)
     {
         var normalized = NormalizeDirectorySeparators(rawPath);
         var span = normalized.AsSpan();
@@ -97,7 +130,7 @@ public sealed class PathPolicy : IPathPolicy
             span = span[1..];
         }
 
-        foreach (var alias in WorkspaceAliases)
+        foreach (var alias in aliases)
         {
             if (span.Equals(alias.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
